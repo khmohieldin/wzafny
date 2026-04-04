@@ -160,7 +160,8 @@
             lastSubmittedSeeker: null, // لحفظ بيانات آخر شخص لطباعة الـ PDF
 
             adFormType: 'external',
-            modals: { login: false, userLogin: false, userRecovery: false, request: false, rating: false, adDetails: false, adminRequestDetails: null, userDetails: null },
+            adminAddUserRole: 'seeker', // للتحكم في الإضافة من الإدارة
+            modals: { login: false, userLogin: false, userRecovery: false, request: false, rating: false, adDetails: false, adminRequestDetails: null, userDetails: null, adminAddUser: false },
             selectedItem: null, 
             search: { term: '', location: '', exp: '' },
             adminTab: 'system_admins',
@@ -608,6 +609,67 @@
                 },
 
                 // --- Admin Actions ---
+                openAdminAddUserModal(role) {
+                    JobAppState.adminAddUserRole = role;
+                    JobAppState.modals.adminAddUser = true;
+                    JobApp.render();
+                },
+                closeAdminAddUserModal() {
+                    JobAppState.modals.adminAddUser = false;
+                    JobApp.render();
+                },
+                async adminSubmitNewUser(e) {
+                    e.preventDefault();
+                    const role = JobAppState.adminAddUserRole;
+                    const name = e.target.name.value;
+                    const phone = e.target.phone.value;
+                    const email = e.target.email.value;
+                    const password = e.target.password.value;
+
+                    try {
+                        if (role === 'seeker') {
+                            const newSeeker = {
+                                password: password,
+                                name: name,
+                                age: e.target.age ? e.target.age.value : 25,
+                                location: e.target.location ? e.target.location.value : 'غير محدد',
+                                phone: phone,
+                                email: email,
+                                jobTitle: e.target.jobTitle ? e.target.jobTitle.value : 'غير محدد',
+                                experience: e.target.experience ? e.target.experience.value : 0,
+                                skills: e.target.skills ? e.target.skills.value.split(',').map(s => s.trim()) : [],
+                                english: 'مقبول',
+                                topStrengths: 'تم إضافته من قبل الإدارة',
+                                previousJobs: [],
+                                isVisible: true,
+                                rating: 0,
+                                reviewsCount: 0,
+                                profileImage: '',
+                                formData: {} 
+                            };
+                            await addDoc(collection(db, 'seekers'), newSeeker);
+                        } else {
+                            const newEmp = {
+                                password: password,
+                                name: name,
+                                profileImage: '',
+                                phone: phone,
+                                email: email,
+                                date: new Date().toLocaleDateString('ar-EG'),
+                                points: 0,
+                                requestsCount: 0
+                            };
+                            await addDoc(collection(db, 'employers'), newEmp);
+                        }
+                        
+                        JobAppState.modals.adminAddUser = false;
+                        alert(`تم إضافة ${role === 'seeker' ? 'طالب الوظيفة' : 'الشركة'} بنجاح!`);
+                        JobApp.render();
+                    } catch(err) {
+                        alert("حدث خطأ أثناء الإضافة: " + err.message);
+                    }
+                },
+
                 async saveSiteSettings(e) {
                     e.preventDefault();
                     JobAppState.siteSettings.name = e.target.siteName.value;
@@ -868,6 +930,40 @@
                         }
                     }
 
+                    // Admin Add User Modal
+                    if (JobAppState.modals.adminAddUser) {
+                        const role = JobAppState.adminAddUserRole;
+                        const isSeeker = role === 'seeker';
+                        html += `
+                        <div class="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm fade-in">
+                            <div class="bg-[#0f172a] border border-slate-600 p-8 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.5)] max-w-lg w-full relative max-h-[90vh] overflow-y-auto">
+                                <button onclick="JobApp.actions.closeAdminAddUserModal()" class="absolute top-6 left-6 text-slate-400 hover:text-white bg-white/5 p-2 rounded-full">✕</button>
+                                <h2 class="text-2xl font-black text-white mb-6 border-b border-white/10 pb-4 flex items-center gap-2">
+                                    <i data-lucide="plus-circle" class="w-6 h-6 ${isSeeker ? 'text-blue-500' : 'text-purple-500'}"></i> 
+                                    إضافة ${isSeeker ? 'طالب وظيفة' : 'شركة'} جديد(ة)
+                                </h2>
+                                <form onsubmit="JobApp.actions.adminSubmitNewUser(event)" class="space-y-4">
+                                    <div><label class="block text-sm text-slate-300 mb-1">الاسم الكامل / اسم الشركة</label><input name="name" required class="w-full px-4 py-3 rounded-lg bg-black/30 border border-slate-700 text-white outline-none"></div>
+                                    <div><label class="block text-sm text-slate-300 mb-1">رقم الهاتف</label><input name="phone" type="tel" required class="w-full px-4 py-3 rounded-lg bg-black/30 border border-slate-700 text-white outline-none text-left" dir="ltr"></div>
+                                    <div><label class="block text-sm text-slate-300 mb-1">البريد الإلكتروني (اختياري)</label><input name="email" type="email" class="w-full px-4 py-3 rounded-lg bg-black/30 border border-slate-700 text-white outline-none text-left" dir="ltr"></div>
+                                    <div><label class="block text-sm text-slate-300 mb-1">كلمة المرور الافتراضية</label><input name="password" required value="123456" class="w-full px-4 py-3 rounded-lg bg-black/30 border border-slate-700 text-white outline-none text-left" dir="ltr"></div>
+                                    
+                                    ${isSeeker ? `
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div><label class="block text-sm text-slate-300 mb-1">الوظيفة المستهدفة</label><input name="jobTitle" required class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white outline-none"></div>
+                                        <div><label class="block text-sm text-slate-300 mb-1">سنوات الخبرة</label><input name="experience" type="number" required class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white outline-none"></div>
+                                        <div><label class="block text-sm text-slate-300 mb-1">العمر</label><input name="age" type="number" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white outline-none"></div>
+                                        <div><label class="block text-sm text-slate-300 mb-1">السكن / الموقع</label><input name="location" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white outline-none"></div>
+                                        <div class="col-span-2"><label class="block text-sm text-slate-300 mb-1">أهم المهارات (مفصولة بفاصلة)</label><input name="skills" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white outline-none" placeholder="مهارة 1, مهارة 2"></div>
+                                    </div>
+                                    ` : ''}
+                                    
+                                    <button type="submit" class="w-full mt-6 ${isSeeker ? 'bg-blue-600 hover:bg-blue-500' : 'bg-purple-600 hover:bg-purple-500'} text-white font-bold py-4 rounded-xl shadow-lg transition-all">إضافة وحفظ</button>
+                                </form>
+                            </div>
+                        </div>`;
+                    }
+
                     // User Login Modal
                     if (JobAppState.modals.userLogin) {
                         html += `
@@ -978,7 +1074,6 @@
                     if (JobAppState.modals.adminRequestDetails) {
                         const req = JobAppState.modals.adminRequestDetails;
                         
-                        // إضافة كود لعرض استمارة الموظف الكاملة داخل الطلب
                         let fullFormHtml = '';
                         if(req.seeker.formData) {
                             fullFormHtml = `
@@ -1829,9 +1924,15 @@
                         }
 
                         tabContent = `
-                        <div class="flex gap-4 mb-6">
-                            <button onclick="JobAppState.usersSubTab='seekers'; JobApp.render()" class="flex-1 py-3 rounded-xl font-bold border ${JobAppState.usersSubTab==='seekers'?'bg-blue-600 border-blue-500 text-white':'bg-slate-800 border-slate-700 text-slate-400'}">طالبي الوظائف (${JobAppState.seekers.length})</button>
-                            <button onclick="JobAppState.usersSubTab='employers'; JobApp.render()" class="flex-1 py-3 rounded-xl font-bold border ${JobAppState.usersSubTab==='employers'?'bg-purple-600 border-purple-500 text-white':'bg-slate-800 border-slate-700 text-slate-400'}">الشركات (${JobAppState.employers.length})</button>
+                        <div class="flex flex-col md:flex-row gap-4 mb-6 justify-between items-center">
+                            <div class="flex gap-4 w-full md:w-auto flex-1">
+                                <button onclick="JobAppState.usersSubTab='seekers'; JobApp.render()" class="flex-1 py-3 rounded-xl font-bold border ${JobAppState.usersSubTab==='seekers'?'bg-blue-600 border-blue-500 text-white':'bg-slate-800 border-slate-700 text-slate-400'}">طالبي الوظائف (${JobAppState.seekers.length})</button>
+                                <button onclick="JobAppState.usersSubTab='employers'; JobApp.render()" class="flex-1 py-3 rounded-xl font-bold border ${JobAppState.usersSubTab==='employers'?'bg-purple-600 border-purple-500 text-white':'bg-slate-800 border-slate-700 text-slate-400'}">الشركات (${JobAppState.employers.length})</button>
+                            </div>
+                            <div class="flex gap-2 w-full md:w-auto">
+                                <button onclick="JobApp.actions.openAdminAddUserModal('seeker')" class="flex-1 md:flex-none bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/30 px-4 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm"><i data-lucide="plus" class="w-4 h-4"></i> إضافة موظف</button>
+                                <button onclick="JobApp.actions.openAdminAddUserModal('employer')" class="flex-1 md:flex-none bg-purple-600/20 hover:bg-purple-600 text-purple-400 hover:text-white border border-purple-500/30 px-4 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 text-sm"><i data-lucide="plus" class="w-4 h-4"></i> إضافة شركة</button>
+                            </div>
                         </div>
                         <div>${usersList}</div>`;
                     }
