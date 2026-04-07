@@ -319,6 +319,7 @@
                     let user = JobAppState.seekers.find(s => s.email === email && s.password === pass);
                     if (user) {
                         JobAppState.loggedInUser = { ...user, role: 'seeker' };
+                        JobAppState.modals.userLogin = false; // اغلاق نافذة المودال اذا كانت مفتوحة
                         JobApp.navigate('seeker_form'); 
                         return;
                     }
@@ -326,6 +327,7 @@
                     user = JobAppState.employers.find(emp => emp.email === email && emp.password === pass);
                     if (user) {
                         JobAppState.loggedInUser = { ...user, role: 'employer' };
+                        JobAppState.modals.userLogin = false; // اغلاق نافذة المودال اذا كانت مفتوحة
                         JobApp.navigate('employer_form');
                         return;
                     }
@@ -357,7 +359,7 @@
                     const password = e.target.password.value;
                     const role = e.target.role.value;
                     
-                    if(JobAppState.seekers.some(s => s.email === email) || JobAppState.employers.some(e => e.email === email)) {
+                    if(JobAppState.seekers.some(s => s.email === email) || JobAppState.employers.some(emp => emp.email === email)) {
                         return alert("هذا البريد الإلكتروني مستخدم بالفعل. يرجى تسجيل الدخول.");
                     }
 
@@ -876,9 +878,37 @@
             // --- UI Components ---
             components: {
                 Header() {
+                    const user = JobAppState.loggedInUser;
                     const logoHtml = JobAppState.siteSettings.logo 
                         ? `<img src="${JobAppState.siteSettings.logo}" class="w-10 h-10 rounded-full object-cover border-2 border-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)]">`
                         : `<div class="bg-gradient-to-tr from-blue-600 to-cyan-400 p-2 rounded-xl text-white shadow-[0_0_15px_rgba(56,189,248,0.5)]"><i data-lucide="briefcase" class="w-5 h-5"></i></div>`;
+
+                    // بناء أزرار القائمة بناءً على صلاحيات الدخول (إخفاء الزر المخالف للفئة)
+                    let navButtons = `<button onclick="JobApp.navigate('home')" class="hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all font-bold text-sm">الرئيسية</button>`;
+                    
+                    if (!user || user.role === 'seeker') {
+                        navButtons += `<button onclick="${user ? "JobApp.navigate('seeker_form')" : "JobApp.actions.startAuth('register', 'seeker')"}" class="hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all font-bold text-sm">طالب وظيفة</button>`;
+                    }
+                    if (!user || user.role === 'employer') {
+                        navButtons += `<button onclick="${user ? "JobApp.navigate('employer_form')" : "JobApp.actions.startAuth('register', 'employer')"}" class="hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all font-bold text-sm">صاحب عمل</button>`;
+                    }
+                    navButtons += `
+                        <button onclick="JobApp.navigate('about')" class="hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all font-bold text-sm">من نحن</button>
+                        <button onclick="JobApp.navigate('contact')" class="hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all font-bold text-sm">راسلنا</button>
+                    `;
+
+                    // أزرار الموبايل
+                    let mobileNavButtons = `<button onclick="document.getElementById('mobile-menu').classList.add('hidden'); JobApp.navigate('home')" class="text-white bg-white/5 hover:bg-white/10 px-4 py-3 rounded-xl transition-all font-bold text-right flex items-center gap-3"><i data-lucide="home" class="w-5 h-5 text-blue-400"></i> الرئيسية</button>`;
+                    if (!user || user.role === 'seeker') {
+                        mobileNavButtons += `<button onclick="document.getElementById('mobile-menu').classList.add('hidden'); ${user ? "JobApp.navigate('seeker_form')" : "JobApp.actions.startAuth('register', 'seeker')"}" class="text-white bg-white/5 hover:bg-white/10 px-4 py-3 rounded-xl transition-all font-bold text-right flex items-center gap-3"><i data-lucide="user" class="w-5 h-5 text-cyan-400"></i> طالب وظيفة</button>`;
+                    }
+                    if (!user || user.role === 'employer') {
+                        mobileNavButtons += `<button onclick="document.getElementById('mobile-menu').classList.add('hidden'); ${user ? "JobApp.navigate('employer_form')" : "JobApp.actions.startAuth('register', 'employer')"}" class="text-white bg-white/5 hover:bg-white/10 px-4 py-3 rounded-xl transition-all font-bold text-right flex items-center gap-3"><i data-lucide="building-2" class="w-5 h-5 text-purple-400"></i> صاحب عمل</button>`;
+                    }
+                    mobileNavButtons += `
+                        <button onclick="document.getElementById('mobile-menu').classList.add('hidden'); JobApp.navigate('about')" class="text-white bg-white/5 hover:bg-white/10 px-4 py-3 rounded-xl transition-all font-bold text-right flex items-center gap-3"><i data-lucide="info" class="w-5 h-5 text-amber-400"></i> من نحن</button>
+                        <button onclick="document.getElementById('mobile-menu').classList.add('hidden'); JobApp.navigate('contact')" class="text-white bg-white/5 hover:bg-white/10 px-4 py-3 rounded-xl transition-all font-bold text-right flex items-center gap-3"><i data-lucide="mail" class="w-5 h-5 text-rose-400"></i> راسلنا</button>
+                    `;
 
                     return `
                     ${JobAppState.firebaseError ? `<div class="bg-rose-600 text-white font-bold text-center py-2 px-2 text-xs md:text-sm shadow-md z-[100] relative"><i data-lucide="alert-triangle" class="inline w-4 h-4 mr-1"></i> <b>تنبيه:</b> وضع التجربة مفعل (بدون قاعدة بيانات). يرجى استخدام Live Server للتفعيل الكامل.</div>` : ''}
@@ -886,18 +916,14 @@
                         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                             <div class="flex items-center justify-between h-16 md:h-20">
                                 <!-- Logo -->
-                                <div class="flex items-center gap-3 cursor-pointer group shrink-0" onclick="JobApp.actions.secretClick()">
+                                <div class="flex items-center gap-3 cursor-pointer group shrink-0">
                                     ${logoHtml}
                                     <h1 class="text-xl md:text-2xl font-black text-white tracking-tight drop-shadow-md select-none hidden sm:block">${JobAppState.siteSettings.name}</h1>
                                 </div>
 
                                 <!-- Desktop Nav (Hidden on Mobile) -->
                                 <nav class="hidden lg:flex items-center gap-1 bg-white/5 p-1 rounded-2xl border border-white/10">
-                                    <button onclick="JobApp.navigate('home')" class="hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all font-bold text-sm">الرئيسية</button>
-                                    <button onclick="JobApp.actions.startAuth('register', 'seeker')" class="hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all font-bold text-sm">طالب وظيفة</button>
-                                    <button onclick="JobApp.actions.startAuth('register', 'employer')" class="hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all font-bold text-sm">صاحب عمل</button>
-                                    <button onclick="JobApp.navigate('about')" class="hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all font-bold text-sm">من نحن</button>
-                                    <button onclick="JobApp.navigate('contact')" class="hover:bg-white/10 text-white px-4 py-2 rounded-xl transition-all font-bold text-sm">راسلنا</button>
+                                    ${navButtons}
                                 </nav>
 
                                 <!-- Auth / Profile Buttons -->
@@ -934,11 +960,7 @@
                             <!-- Mobile Navigation (Dropdown) -->
                             <div id="mobile-menu" class="hidden lg:hidden border-t border-white/10 py-4 bg-[#070b19]/95 backdrop-blur-xl absolute w-full left-0 px-4 shadow-2xl">
                                 <div class="flex flex-col gap-2">
-                                    <button onclick="document.getElementById('mobile-menu').classList.add('hidden'); JobApp.navigate('home')" class="text-white bg-white/5 hover:bg-white/10 px-4 py-3 rounded-xl transition-all font-bold text-right flex items-center gap-3"><i data-lucide="home" class="w-5 h-5 text-blue-400"></i> الرئيسية</button>
-                                    <button onclick="document.getElementById('mobile-menu').classList.add('hidden'); JobApp.actions.startAuth('register', 'seeker')" class="text-white bg-white/5 hover:bg-white/10 px-4 py-3 rounded-xl transition-all font-bold text-right flex items-center gap-3"><i data-lucide="user" class="w-5 h-5 text-cyan-400"></i> طالب وظيفة</button>
-                                    <button onclick="document.getElementById('mobile-menu').classList.add('hidden'); JobApp.actions.startAuth('register', 'employer')" class="text-white bg-white/5 hover:bg-white/10 px-4 py-3 rounded-xl transition-all font-bold text-right flex items-center gap-3"><i data-lucide="building-2" class="w-5 h-5 text-purple-400"></i> صاحب عمل</button>
-                                    <button onclick="document.getElementById('mobile-menu').classList.add('hidden'); JobApp.navigate('about')" class="text-white bg-white/5 hover:bg-white/10 px-4 py-3 rounded-xl transition-all font-bold text-right flex items-center gap-3"><i data-lucide="info" class="w-5 h-5 text-amber-400"></i> من نحن</button>
-                                    <button onclick="document.getElementById('mobile-menu').classList.add('hidden'); JobApp.navigate('contact')" class="text-white bg-white/5 hover:bg-white/10 px-4 py-3 rounded-xl transition-all font-bold text-right flex items-center gap-3"><i data-lucide="mail" class="w-5 h-5 text-rose-400"></i> راسلنا</button>
+                                    ${mobileNavButtons}
                                 </div>
                             </div>
                         </div>
@@ -1380,6 +1402,7 @@
                 },
 
                 home() {
+                    const user = JobAppState.loggedInUser;
                     let adsHtml = '';
                     if (JobAppState.ads.length > 0) {
                         adsHtml = `
@@ -1412,6 +1435,42 @@
                     const sImg = JobAppState.siteSettings.seekerPortalImg;
                     const eImg = JobAppState.siteSettings.employerPortalImg;
 
+                    // إخفاء البطاقات بناءً على المستخدم (إذا لم يسجل دخول نعرض الاثنين)
+                    let seekerCardHtml = '';
+                    if (!user || user.role === 'seeker') {
+                        const action = user ? "JobApp.navigate('seeker_form')" : "JobApp.actions.startAuth('register', 'seeker')";
+                        const btnText = user ? 'لوحة التحكم - استمارة التوظيف' : 'أنشئ حسابك وسجل بياناتك';
+                        seekerCardHtml = `
+                            <div class="relative group cursor-pointer h-full" onclick="${action}">
+                                <div class="absolute inset-0 bg-gradient-to-b from-blue-400 to-blue-800 rounded-3xl blur-md opacity-40 group-hover:opacity-70 transition-opacity"></div>
+                                <div class="relative h-full glass-panel rounded-3xl flex flex-col items-center text-center shadow-[inset_0_0_30px_rgba(59,130,246,0.1)] hover:-translate-y-1 md:hover:-translate-y-2 transition-transform overflow-hidden p-6 md:p-10">
+                                    ${sImg ? `<div class="w-full h-32 sm:h-48 md:h-56 mb-4 md:mb-6 rounded-2xl overflow-hidden shadow-[0_0_15px_rgba(59,130,246,0.5)] border-2 border-blue-400 shrink-0"><img src="${sImg}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"></div>` : ''}
+                                    <h3 class="text-2xl md:text-3xl font-extrabold text-white mb-6 md:mb-8">بوابة الباحث عن عمل</h3>
+                                    <button class="mt-auto w-full bg-gradient-to-r from-blue-600 to-blue-400 text-white font-bold text-lg md:text-xl py-3.5 md:py-4 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.6)]">${btnText}</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    let employerCardHtml = '';
+                    if (!user || user.role === 'employer') {
+                        const action = user ? "JobApp.navigate('employer_form')" : "JobApp.actions.startAuth('register', 'employer')";
+                        const btnText = user ? 'ابحث عن كفاءات الآن' : 'بوابة أصحاب الشركات';
+                        employerCardHtml = `
+                            <div class="relative group cursor-pointer h-full" onclick="${action}">
+                                <div class="absolute inset-0 bg-gradient-to-b from-purple-400 to-purple-800 rounded-3xl blur-md opacity-40 group-hover:opacity-70 transition-opacity"></div>
+                                <div class="relative h-full glass-panel rounded-3xl flex flex-col items-center text-center shadow-[inset_0_0_30px_rgba(168,85,247,0.1)] hover:-translate-y-1 md:hover:-translate-y-2 transition-transform overflow-hidden p-6 md:p-10">
+                                    ${eImg ? `<div class="w-full h-32 sm:h-48 md:h-56 mb-4 md:mb-6 rounded-2xl overflow-hidden shadow-[0_0_15px_rgba(168,85,247,0.5)] border-2 border-purple-400 shrink-0"><img src="${eImg}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"></div>` : ''}
+                                    <h3 class="text-2xl md:text-3xl font-extrabold text-white mb-6 md:mb-8">بوابة صاحب العمل</h3>
+                                    <button class="mt-auto w-full bg-gradient-to-r from-purple-600 to-purple-400 text-white font-bold text-lg md:text-xl py-3.5 md:py-4 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.6)]">${btnText}</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // تعديل الأعمدة لتبقى البطاقة بمنتصف الشاشة اذا تم عرض واحدة فقط
+                    const gridLayout = (!user) ? 'grid md:grid-cols-2 gap-6 md:gap-10 max-w-5xl mx-auto' : 'grid grid-cols-1 gap-6 max-w-2xl mx-auto';
+
                     return `
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 md:pt-12 pb-16 fade-in">
                         ${adsHtml}
@@ -1421,23 +1480,9 @@
                             </h2>
                             <p class="text-base md:text-xl text-blue-200/80 mb-6 md:mb-10 font-medium px-2">منصة ذكية تربطك بأفضل الفرص وأفضل الكفاءات بخطوات بسيطة</p>
                         </div>
-                        <div class="grid md:grid-cols-2 gap-6 md:gap-10 max-w-5xl mx-auto mb-10 md:mb-20">
-                            <div class="relative group cursor-pointer h-full" onclick="JobApp.actions.startAuth('register', 'seeker')">
-                                <div class="absolute inset-0 bg-gradient-to-b from-blue-400 to-blue-800 rounded-3xl blur-md opacity-40 group-hover:opacity-70 transition-opacity"></div>
-                                <div class="relative h-full glass-panel rounded-3xl flex flex-col items-center text-center shadow-[inset_0_0_30px_rgba(59,130,246,0.1)] hover:-translate-y-1 md:hover:-translate-y-2 transition-transform overflow-hidden p-6 md:p-10">
-                                    ${sImg ? `<div class="w-full h-32 sm:h-48 md:h-56 mb-4 md:mb-6 rounded-2xl overflow-hidden shadow-[0_0_15px_rgba(59,130,246,0.5)] border-2 border-blue-400 shrink-0"><img src="${sImg}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"></div>` : ''}
-                                    <h3 class="text-2xl md:text-3xl font-extrabold text-white mb-6 md:mb-8">بوابة الباحث عن عمل</h3>
-                                    <button class="mt-auto w-full bg-gradient-to-r from-blue-600 to-blue-400 text-white font-bold text-lg md:text-xl py-3.5 md:py-4 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.6)]">أنشئ حسابك وسجل بياناتك</button>
-                                </div>
-                            </div>
-                            <div class="relative group cursor-pointer h-full" onclick="JobApp.actions.startAuth('register', 'employer')">
-                                <div class="absolute inset-0 bg-gradient-to-b from-purple-400 to-purple-800 rounded-3xl blur-md opacity-40 group-hover:opacity-70 transition-opacity"></div>
-                                <div class="relative h-full glass-panel rounded-3xl flex flex-col items-center text-center shadow-[inset_0_0_30px_rgba(168,85,247,0.1)] hover:-translate-y-1 md:hover:-translate-y-2 transition-transform overflow-hidden p-6 md:p-10">
-                                    ${eImg ? `<div class="w-full h-32 sm:h-48 md:h-56 mb-4 md:mb-6 rounded-2xl overflow-hidden shadow-[0_0_15px_rgba(168,85,247,0.5)] border-2 border-purple-400 shrink-0"><img src="${eImg}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"></div>` : ''}
-                                    <h3 class="text-2xl md:text-3xl font-extrabold text-white mb-6 md:mb-8">بوابة صاحب العمل</h3>
-                                    <button class="mt-auto w-full bg-gradient-to-r from-purple-600 to-purple-400 text-white font-bold text-lg md:text-xl py-3.5 md:py-4 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.6)]">ابحث عن كفاءات الآن</button>
-                                </div>
-                            </div>
+                        <div class="${gridLayout} mb-10 md:mb-20">
+                            ${seekerCardHtml}
+                            ${employerCardHtml}
                         </div>
                     </div>`;
                 },
@@ -1756,9 +1801,6 @@
                             `).join('')}
                         </div>`;
                     }
-
-                    // (The rest of the tabs: users, settings_form, ads, messages follow the same responsive pattern)
-                    // Due to constraints, assuming similar grid/flex responsive updates applied to them.
 
                     return `
                     <div class="w-full mx-auto px-2 md:px-4 pt-4 md:pt-8 fade-in">
