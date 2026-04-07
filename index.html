@@ -62,6 +62,23 @@
         .ad-card { animation: neon-glow-pulse 4s infinite alternate ease-in-out; }
         .ad-card:nth-child(even) { animation-delay: -2s; animation-direction: alternate-reverse; }
 
+        @keyframes ticker-ltr {
+            from { transform: translateX(-100vw); }
+            to { transform: translateX(100vw); }
+        }
+        .animate-ticker {
+            display: inline-block;
+            white-space: nowrap;
+            animation: ticker-ltr linear infinite;
+        }
+        .marquee-container {
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
         .glass-panel {
             background: rgba(11, 20, 55, 0.6);
             backdrop-filter: blur(16px);
@@ -151,7 +168,7 @@
             authMode: 'login', 
             
             siteSettings: {
-                name: 'وظفني', logo: '', adminName: 'خالد محي الدين', adminRole: 'مدير الموقع', adminPhone: '6762112', adminEmail: 'khmohieldin@gmail.com', aboutUs: 'منصة وظفني هي المنصة الأولى من نوعها...', seekerPortalImg: '', employerPortalImg: ''
+                name: 'وظفني', logo: '', adminName: 'خالد محي الدين', adminRole: 'مدير الموقع', adminPhone: '6762112', adminEmail: 'khmohieldin@gmail.com', aboutUs: 'منصة وظفني هي المنصة الأولى من نوعها...', seekerPortalImg: '', employerPortalImg: '', tickerEnabled: true, tickerSpeed: 30, tickerMode: 'auto', tickerManualText: ''
             },
             
             secretClickCount: 0,
@@ -653,7 +670,7 @@
                     if(seeker) {
                         const newStatus = !seeker.isHired;
                         const confirmMsg = newStatus 
-                            ? 'هل أنت متأكد من تعيين هذا الموظف كـ "تم الاتفاق"؟ سيختفي ملفه من أمام الشركات تماماً.' 
+                            ? 'هل أنت متأكد من تعيين هذا الموظف كـ "تم الاتفاق"؟ سيختفي ملفه من أمام الشركات تماماً ولن يظهر لهم مجدداً.' 
                             : 'هل تريد إلغاء حالة "تم الاتفاق" وإعادة الموظف للظهور أمام الشركات؟';
                             
                         if(window.confirm(confirmMsg)) {
@@ -717,6 +734,10 @@
                     JobAppState.siteSettings.adminPhone = e.target.adminPhone.value;
                     JobAppState.siteSettings.adminEmail = e.target.adminEmail.value;
                     JobAppState.siteSettings.aboutUs = e.target.aboutUs.value;
+                    JobAppState.siteSettings.tickerEnabled = e.target.tickerEnabled.value === 'true';
+                    JobAppState.siteSettings.tickerSpeed = parseInt(e.target.tickerSpeed.value) || 30;
+                    JobAppState.siteSettings.tickerMode = e.target.tickerMode.value;
+                    JobAppState.siteSettings.tickerManualText = e.target.tickerManualText.value;
                     
                     try {
                         if (!JobAppState.isOffline) await setDoc(doc(db, 'settings', 'global'), JobAppState.siteSettings);
@@ -1460,7 +1481,33 @@
                         </div>`;
                     }
 
-                    // --- شريط الإحصائيات الجديد ---
+                    const settings = JobAppState.siteSettings;
+                    let tickerHtml = '';
+                    if (settings.tickerEnabled !== false) {
+                        const tMode = settings.tickerMode || 'auto';
+                        const tSpeed = settings.tickerSpeed || 30;
+                        let tText = '';
+                        
+                        if (tMode === 'auto') {
+                            const cSeekers = JobAppState.seekers.length;
+                            const cEmployers = JobAppState.employers.length;
+                            const cHired = JobAppState.seekers.filter(s => s.isHired).length;
+                            tText = `🏢 عدد الشركات المنضمة (${cEmployers} شركة) &nbsp;&nbsp; | &nbsp;&nbsp; 👨‍💼 عدد الموظفين الباحثين (${cSeekers} موظف) &nbsp;&nbsp; | &nbsp;&nbsp; ✅ بفضل الله تم الاتفاق وتوظيف (${cHired} موظف)`;
+                        } else {
+                            tText = settings.tickerManualText || 'أهلاً بكم في منصة وظفني...';
+                        }
+
+                        tickerHtml = `
+                        <div class="w-full bg-[#0a1128]/90 border-b border-blue-900/50 text-white marquee-container shadow-lg relative z-40 overflow-hidden flex items-center h-10 md:h-12 backdrop-blur-md">
+                            <div class="absolute right-0 top-0 bottom-0 bg-[#050814] px-3 md:px-4 flex items-center justify-center font-black text-xs md:text-sm shadow-[10px_0_20px_rgba(0,0,0,0.9)] z-20 border-l border-blue-500/30 text-amber-400 shrink-0">
+                                <i data-lucide="radio" class="w-4 h-4 ml-1 md:ml-2 animate-pulse text-rose-500"></i> أخبار الموقع
+                            </div>
+                            <div class="animate-ticker text-sm md:text-base font-bold text-blue-100 flex-grow" style="animation-duration: ${tSpeed}s;">
+                                ${tText}
+                            </div>
+                        </div>`;
+                    }
+
                     const totalSeekers = JobAppState.seekers.length;
                     const totalEmployers = JobAppState.employers.length;
                     const totalHired = JobAppState.seekers.filter(s => s.isHired).length;
@@ -1522,7 +1569,8 @@
                     const gridLayout = (!user) ? 'grid md:grid-cols-2 gap-6 md:gap-10 max-w-5xl mx-auto mb-10 md:mb-20' : 'grid grid-cols-1 gap-6 max-w-2xl mx-auto mb-10 md:mb-20';
 
                     return `
-                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 md:pt-12 pb-16 fade-in">
+                    ${tickerHtml}
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 md:pt-12 pb-16 fade-in">
                         ${adsHtml}
                         <div class="text-center max-w-4xl mx-auto mb-6 md:mb-10 mt-4 md:mt-8">
                             <h2 class="text-3xl sm:text-5xl md:text-7xl font-extrabold text-white mb-4 md:mb-6 drop-shadow-[0_0_20px_rgba(255,255,255,0.4)] flex items-center justify-center gap-2 md:gap-4 flex-wrap">
@@ -1822,7 +1870,34 @@
                                     <div><label class="block text-xs md:text-sm text-slate-300 mb-1">البريد الإلكتروني العام</label><input name="adminEmail" value="${JobAppState.siteSettings.adminEmail}" type="email" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm text-left" dir="ltr" required></div>
                                     <div class="sm:col-span-2"><label class="block text-xs md:text-sm text-slate-300 mb-1">نص "من نحن"</label><textarea name="aboutUs" required rows="4" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm resize-none">${JobAppState.siteSettings.aboutUs}</textarea></div>
                                 </div>
-                                <div class="grid sm:grid-cols-2 gap-4 border-t border-white/10 pt-4 mt-2">
+                                <div class="grid sm:grid-cols-2 gap-4 border-t border-white/10 pt-4 mt-4">
+                                    <div class="sm:col-span-2 mb-2">
+                                        <h4 class="text-amber-400 font-bold flex items-center gap-2"><i data-lucide="radio" class="w-5 h-5"></i> إعدادات الشريط الإخباري (الرئيسية)</h4>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs md:text-sm text-slate-300 mb-1">حالة الشريط</label>
+                                        <select name="tickerEnabled" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm">
+                                            <option value="true" ${JobAppState.siteSettings.tickerEnabled !== false ? 'selected' : ''}>مفعل (يظهر للجميع)</option>
+                                            <option value="false" ${JobAppState.siteSettings.tickerEnabled === false ? 'selected' : ''}>معطل (مخفي)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs md:text-sm text-slate-300 mb-1">سرعة الحركة (بالثواني - رقم أكبر = أبطأ)</label>
+                                        <input name="tickerSpeed" type="number" value="${JobAppState.siteSettings.tickerSpeed || 30}" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm" required>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs md:text-sm text-slate-300 mb-1">مصدر البيانات</label>
+                                        <select name="tickerMode" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm">
+                                            <option value="auto" ${JobAppState.siteSettings.tickerMode !== 'manual' ? 'selected' : ''}>تلقائي (إحصائيات حية)</option>
+                                            <option value="manual" ${JobAppState.siteSettings.tickerMode === 'manual' ? 'selected' : ''}>يدوي (نص مخصص)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs md:text-sm text-slate-300 mb-1">النص المخصص (في حال اختيار يدوي)</label>
+                                        <input name="tickerManualText" value="${JobAppState.siteSettings.tickerManualText || ''}" placeholder="اكتب خبر عاجل هنا..." class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm">
+                                    </div>
+                                </div>
+                                <div class="grid sm:grid-cols-2 gap-4 border-t border-white/10 pt-4 mt-4">
                                     <div>
                                         <label class="block text-xs md:text-sm text-blue-300 mb-1">صورة بوابة الموظف (الرئيسية)</label>
                                         <div class="flex gap-2">
