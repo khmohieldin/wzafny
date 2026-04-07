@@ -335,7 +335,7 @@
                     alert('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
                 },
                 secretClick() {
-                    // مُعالجة النقرة السرية بواسطة الـ Event Listener العام في الأعلى لمنع أخطاء الكونسول
+                    // مُعالجة النقرة السرية تم تداركها بالكامل بالأسفل بالاعتماد على event listener عام
                 },
                 userLogout() {
                     JobAppState.loggedInUser = null;
@@ -1757,15 +1757,34 @@
                             <h3 class="text-lg md:text-xl font-bold text-white mb-4">إعدادات الموقع</h3>
                             <form onsubmit="JobApp.actions.saveSiteSettings(event)" class="space-y-4 md:space-y-6">
                                 <div class="grid sm:grid-cols-2 gap-4">
-                                    <div><label class="block text-xs md:text-sm text-slate-300 mb-1">اسم الموقع</label><input name="siteName" value="${JobAppState.siteSettings.name}" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm"></div>
+                                    <div><label class="block text-xs md:text-sm text-slate-300 mb-1">اسم الموقع</label><input name="siteName" value="${JobAppState.siteSettings.name}" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm" required></div>
                                     <div>
                                         <label class="block text-xs md:text-sm text-slate-300 mb-1">شعار الموقع</label>
                                         <input type="file" accept="image/*" onchange="JobApp.actions.uploadImage(this, 'siteLogo')" class="text-slate-300 text-xs w-full p-1.5 bg-black/30 border border-slate-700 rounded-lg">
                                     </div>
-                                    <div><label class="block text-xs md:text-sm text-slate-300 mb-1">اسم المدير (يظهر في راسلنا)</label><input name="adminName" value="${JobAppState.siteSettings.adminName}" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm"></div>
-                                    <div><label class="block text-xs md:text-sm text-slate-300 mb-1">الهاتف العام</label><input name="adminPhone" value="${JobAppState.siteSettings.adminPhone}" type="tel" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm text-left" dir="ltr"></div>
+                                    <div><label class="block text-xs md:text-sm text-slate-300 mb-1">اسم المدير (يظهر في راسلنا)</label><input name="adminName" value="${JobAppState.siteSettings.adminName}" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm" required></div>
+                                    <div><label class="block text-xs md:text-sm text-slate-300 mb-1">المسمى الوظيفي للمدير</label><input name="adminRole" value="${JobAppState.siteSettings.adminRole}" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm" required></div>
+                                    <div><label class="block text-xs md:text-sm text-slate-300 mb-1">الهاتف العام</label><input name="adminPhone" value="${JobAppState.siteSettings.adminPhone}" type="tel" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm text-left" dir="ltr" required></div>
+                                    <div><label class="block text-xs md:text-sm text-slate-300 mb-1">البريد الإلكتروني العام</label><input name="adminEmail" value="${JobAppState.siteSettings.adminEmail}" type="email" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm text-left" dir="ltr" required></div>
+                                    <div class="sm:col-span-2"><label class="block text-xs md:text-sm text-slate-300 mb-1">نص "من نحن"</label><textarea name="aboutUs" required rows="4" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm resize-none">${JobAppState.siteSettings.aboutUs}</textarea></div>
                                 </div>
-                                <button type="submit" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg text-sm md:text-base">حفظ الإعدادات</button>
+                                <div class="grid sm:grid-cols-2 gap-4 border-t border-white/10 pt-4 mt-2">
+                                    <div>
+                                        <label class="block text-xs md:text-sm text-blue-300 mb-1">صورة بوابة الموظف (الرئيسية)</label>
+                                        <div class="flex gap-2">
+                                            <input type="file" accept="image/*" onchange="JobApp.actions.uploadImage(this, 'seekerPortalImg')" class="text-slate-300 text-xs w-full p-1.5 bg-black/30 border border-slate-700 rounded-lg">
+                                            ${JobAppState.siteSettings.seekerPortalImg ? `<button type="button" onclick="JobApp.actions.deletePortalImage('seeker')" class="bg-rose-500/20 text-rose-400 px-3 rounded-lg text-xs font-bold border border-rose-500/30">حذف</button>` : ''}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs md:text-sm text-purple-300 mb-1">صورة بوابة الشركة (الرئيسية)</label>
+                                        <div class="flex gap-2">
+                                            <input type="file" accept="image/*" onchange="JobApp.actions.uploadImage(this, 'employerPortalImg')" class="text-slate-300 text-xs w-full p-1.5 bg-black/30 border border-slate-700 rounded-lg">
+                                            ${JobAppState.siteSettings.employerPortalImg ? `<button type="button" onclick="JobApp.actions.deletePortalImage('employer')" class="bg-rose-500/20 text-rose-400 px-3 rounded-lg text-xs font-bold border border-rose-500/30">حذف</button>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg text-sm md:text-base mt-2">حفظ الإعدادات</button>
                             </form>
                         </div>`;
                     }
