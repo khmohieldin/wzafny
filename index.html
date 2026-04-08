@@ -2005,6 +2005,26 @@
                             actionButtonHtml = `<button onclick="JobApp.actions.openRequestModal('${s.id}')" class="mt-auto w-full bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white font-black py-3 md:py-4 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.4)] flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform text-sm md:text-base"><i data-lucide="lock" class="w-4 h-4 md:w-5 md:h-5"></i> طلب تعيين (البيانات كاملة)</button>`;
                         }
 
+                        // --- الجديد: استخراج جميع بيانات الاستمارة ديناميكياً وعرضها في الكارت (ماعدا بيانات التواصل) ---
+                        let formDetailsHtml = '';
+                        if (s.formData) {
+                            const excludedFields = ['f1', 'f15']; // الاسم والوظيفة يظهران بالفعل في رأس الكارت
+                            const allowedFields = JobAppState.formFields.filter(f => f.section !== 'contact' && !excludedFields.includes(f.id) && s.formData[f.id]);
+                            
+                            if(allowedFields.length > 0) {
+                                formDetailsHtml = `
+                                <div class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
+                                    ${allowedFields.map(f => `
+                                        <div class="bg-black/30 p-2.5 rounded-xl border border-white/5 flex flex-col justify-center">
+                                            <span class="text-[10px] md:text-xs text-purple-300/80 block mb-1 font-bold">${f.label}</span>
+                                            <span class="text-xs md:text-sm text-white font-bold block whitespace-pre-wrap leading-relaxed">${s.formData[f.id]}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                `;
+                            }
+                        }
+
                         return `
                         <div class="glass-panel rounded-3xl p-5 md:p-8 hover:border-purple-500/50 transition-all shadow-lg flex flex-col relative overflow-hidden group">
                             <div class="absolute top-0 left-0 w-1 bg-gradient-to-b from-purple-400 to-fuchsia-600 h-full"></div>
@@ -2023,20 +2043,17 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="flex flex-wrap gap-2 md:gap-4 mb-4 md:mb-6 text-xs md:text-sm text-blue-100/80 font-medium">
-                                <span class="flex items-center gap-1.5 bg-black/20 px-2 md:px-3 py-1.5 rounded-lg"><i data-lucide="map-pin" class="w-3 h-3 md:w-4 md:h-4 text-purple-400"></i> ${(s.location || 'غير محدد').split('-')[0]}</span>
-                                <span class="flex items-center gap-1.5 bg-black/20 px-2 md:px-3 py-1.5 rounded-lg"><i data-lucide="clock" class="w-3 h-3 md:w-4 md:h-4 text-purple-400"></i> خبرة: ${s.experience || 0} س</span>
-                            </div>
-                            <div class="mb-6 flex-grow">
-                                <h5 class="text-amber-400 text-xs md:text-sm font-bold mb-2 md:mb-3 flex items-center gap-2"><i data-lucide="sparkles" class="w-3 h-3 md:w-4 md:h-4"></i> نقاط التميز والأعمال:</h5>
-                                <p class="text-white/90 text-xs md:text-sm leading-relaxed mb-3 md:mb-4 bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
-                                    "${s.topStrengths || 'غير محدد'}"
-                                    ${s.bio && !s.hasBioViolation ? `<br/><br/><span class="text-amber-200"><strong>النبذة:</strong> ${s.bio}</span>` : ''}
-                                    ${s.hasBioViolation ? `<br/><br/><span class="text-rose-400 text-[10px] font-bold"><i data-lucide="shield-alert" class="inline w-3 h-3"></i> النبذة مخفية لمخالفة الشروط وتنتظر مراجعة الإدارة</span>` : ''}
+                            
+                            <!-- عرض جميع حقول الاستمارة بشكل ديناميكي -->
+                            ${formDetailsHtml}
+
+                            <div class="mb-6 flex-grow border-t border-white/10 pt-4">
+                                <h5 class="text-amber-400 text-xs md:text-sm font-bold mb-2 md:mb-3 flex items-center gap-2"><i data-lucide="sparkles" class="w-3 h-3 md:w-4 md:h-4"></i> نبذة عني وسابقة أعمالي:</h5>
+                                <p class="text-white/90 text-xs md:text-sm leading-relaxed mb-3 md:mb-4 bg-amber-500/10 p-4 rounded-xl border border-amber-500/20">
+                                    ${s.bio && !s.hasBioViolation ? `<span class="whitespace-pre-wrap">${s.bio}</span>` : ''}
+                                    ${!s.bio ? '<span class="text-slate-400 italic font-medium">لم يقم الموظف بإضافة نبذة أو سابقة أعمال حتى الآن.</span>' : ''}
+                                    ${s.hasBioViolation ? `<span class="text-rose-400 font-bold flex items-center gap-1"><i data-lucide="shield-alert" class="w-4 h-4"></i> النبذة مخفية وتنتظر مراجعة الإدارة لوجود بيانات تواصل</span>` : ''}
                                 </p>
-                                <div class="flex flex-wrap gap-1.5 md:gap-2">
-                                    ${(s.skills || []).slice(0, 5).map(skill => `<span class="bg-white/10 text-white text-[10px] md:text-xs px-2 md:px-3 py-1 md:py-1.5 rounded-lg border border-white/20">${skill}</span>`).join('')}
-                                </div>
                             </div>
                             ${actionButtonHtml}
                         </div>
