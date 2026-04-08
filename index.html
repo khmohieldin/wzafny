@@ -238,7 +238,9 @@
 
         // --- Core Framework ---
         window.JobApp = {
+            renderTimer: null,
             init: async function() {
+                this.syncSession(); // محاولة استعادة الجلسة مباشرة
                 this.render(); 
 
                 try {
@@ -246,11 +248,11 @@
                     await signInAnonymously(auth);
                     await seedDefaults();
                     
-                    onSnapshot(doc(db, 'settings', 'global'), doc => { if(doc.exists()) { JobAppState.siteSettings = doc.data(); this.render(); }});
-                    onSnapshot(collection(db, 'systemAdmins'), snap => { JobAppState.systemAdmins = snap.docs.map(d => ({id: d.id, ...d.data()})); this.render(); });
+                    onSnapshot(doc(db, 'settings', 'global'), doc => { if(doc.exists()) { JobAppState.siteSettings = doc.data(); this.syncSession(); this.render(); }});
+                    onSnapshot(collection(db, 'systemAdmins'), snap => { JobAppState.systemAdmins = snap.docs.map(d => ({id: d.id, ...d.data()})); this.syncSession(); this.render(); });
                     onSnapshot(collection(db, 'formFields'), snap => { JobAppState.formFields = snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a, b) => parseInt(a.id.replace('f', '')) - parseInt(b.id.replace('f', ''))); this.render(); });
-                    onSnapshot(collection(db, 'seekers'), snap => { JobAppState.seekers = snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>b.rating - a.rating); this.render(); });
-                    onSnapshot(collection(db, 'employers'), snap => { JobAppState.employers = snap.docs.map(d => ({id: d.id, ...d.data()})); this.render(); });
+                    onSnapshot(collection(db, 'seekers'), snap => { JobAppState.seekers = snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>b.rating - a.rating); this.syncSession(); this.render(); });
+                    onSnapshot(collection(db, 'employers'), snap => { JobAppState.employers = snap.docs.map(d => ({id: d.id, ...d.data()})); this.syncSession(); this.render(); });
                     onSnapshot(collection(db, 'requests'), snap => { JobAppState.requests = snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>b.id - a.id); this.render(); });
                     onSnapshot(collection(db, 'ads'), snap => { JobAppState.ads = snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>b.id - a.id); this.render(); });
                     onSnapshot(collection(db, 'messages'), snap => { JobAppState.messages = snap.docs.map(d => ({id: d.id, ...d.data()})).sort((a,b)=>b.id - a.id); this.render(); });
@@ -262,7 +264,54 @@
                 }
             },
             
+            // دالة التزامن للحفاظ على المستخدم مسجلاً وتحديث بياناته مباشرة
+            syncSession: function() {
+                if (JobAppState.loggedInUser) {
+                    if (JobAppState.loggedInUser.role === 'seeker') {
+                        const updated = JobAppState.seekers.find(s => s.id === JobAppState.loggedInUser.id);
+                        if (updated) JobAppState.loggedInUser = { ...updated, role: 'seeker' };
+                    } else if (JobAppState.loggedInUser.role === 'employer') {
+                        const updated = JobAppState.employers.find(e => e.id === JobAppState.loggedInUser.id);
+                        if (updated) JobAppState.loggedInUser = { ...updated, role: 'employer' };
+                    }
+                } else {
+                    const uAuth = localStorage.getItem('wzafny_user');
+                    if (uAuth) {
+                        try {
+                            const { id, role } = JSON.parse(uAuth);
+                            if (role === 'seeker') {
+                                const s = JobAppState.seekers.find(x => x.id === id);
+                                if (s) JobAppState.loggedInUser = { ...s, role };
+                            } else if (role === 'employer') {
+                                const e = JobAppState.employers.find(x => x.id === id);
+                                if (e) JobAppState.loggedInUser = { ...e, role };
+                            }
+                        } catch(e) {}
+                    }
+                }
+
+                if (JobAppState.loggedInAdmin) {
+                    const updated = JobAppState.systemAdmins.find(a => a.id === JobAppState.loggedInAdmin.id);
+                    if(updated) JobAppState.loggedInAdmin = updated;
+                } else {
+                    const aAuth = localStorage.getItem('wzafny_admin');
+                    if (aAuth) {
+                        try {
+                            const { email, pass } = JSON.parse(aAuth);
+                            const a = JobAppState.systemAdmins.find(x => x.email === email && x.password === pass);
+                            if (a) JobAppState.loggedInAdmin = a;
+                        } catch(e) {}
+                    }
+                }
+            },
+
+            // دالة الرندر مزودة بـ Debounce لمنع الرعشة عند التحميل المتعدد
             render: function() {
+                if (this.renderTimer) clearTimeout(this.renderTimer);
+                this.renderTimer = setTimeout(() => this._doRender(), 50);
+            },
+
+            _doRender: function() {
                 const appDiv = document.getElementById('app');
                 if (!appDiv) return;
 
@@ -304,6 +353,7 @@
                     const admin = JobAppState.systemAdmins.find(a => a.email === email && a.password === pass);
                     if (admin) {
                         JobAppState.loggedInAdmin = admin;
+                        localStorage.setItem('wzafny_admin', JSON.stringify({ email: admin.email, pass: admin.password })); // حفظ الجلسة
                         JobAppState.modals.login = false;
                         JobAppState.adminRecoveryMode = false;
                         JobApp.navigate('admin_dashboard');
@@ -336,6 +386,7 @@
                     let user = JobAppState.seekers.find(s => s.email === email && s.password === pass);
                     if (user) {
                         JobAppState.loggedInUser = { ...user, role: 'seeker' };
+                        localStorage.setItem('wzafny_user', JSON.stringify({ id: user.id, role: 'seeker' })); // حفظ الجلسة
                         JobAppState.modals.userLogin = false;
                         JobApp.navigate('seeker_form'); 
                         return;
@@ -344,6 +395,7 @@
                     user = JobAppState.employers.find(emp => emp.email === email && emp.password === pass);
                     if (user) {
                         JobAppState.loggedInUser = { ...user, role: 'employer' };
+                        localStorage.setItem('wzafny_user', JSON.stringify({ id: user.id, role: 'employer' })); // حفظ الجلسة
                         JobAppState.modals.userLogin = false;
                         JobApp.navigate('employer_form');
                         return;
@@ -356,6 +408,9 @@
                 },
                 userLogout() {
                     JobAppState.loggedInUser = null;
+                    JobAppState.loggedInAdmin = null;
+                    localStorage.removeItem('wzafny_user');
+                    localStorage.removeItem('wzafny_admin');
                     JobApp.navigate('home');
                 },
                 userRecoverySubmit(e) {
@@ -395,6 +450,7 @@
                             JobAppState.seekers.unshift(newSeeker);
                             JobAppState.loggedInUser = { ...newSeeker, role: 'seeker' };
                         }
+                        localStorage.setItem('wzafny_user', JSON.stringify({ id: JobAppState.loggedInUser.id, role: 'seeker' }));
                         JobApp.navigate('seeker_form'); 
 
                     } else {
@@ -409,6 +465,7 @@
                             JobAppState.employers.unshift(newEmp);
                             JobAppState.loggedInUser = { ...newEmp, role: 'employer' };
                         }
+                        localStorage.setItem('wzafny_user', JSON.stringify({ id: JobAppState.loggedInUser.id, role: 'employer' }));
                         JobApp.navigate('employer_form'); 
                     }
                 },
@@ -655,7 +712,8 @@
                     if(!feedback.trim()) return alert("يرجى كتابة تعليق يوضح سبب التقييم (إجباري)");
                     
                     const req = JobAppState.selectedItem;
-                    const emp = JobAppState.employers.find(x => x.phone === req.employerPhone);
+                    // الاعتماد على حساب الشركة المسجل دخولها حالياً بدلاً من رقم الهاتف لضمان الدقة وتفادي الأخطاء
+                    const emp = JobAppState.employers.find(x => x.id === JobAppState.loggedInUser.id);
                     const seeker = JobAppState.seekers.find(s => s.id === req.seeker.id);
 
                     try {
@@ -676,12 +734,9 @@
                             }
                         }
 
-                        if(emp && JobAppState.loggedInUser && JobAppState.loggedInUser.id === emp.id) {
-                            JobAppState.loggedInUser.points = emp.points;
-                        }
-
+                        // سيتم تحديث الجلسة بفضل دالة syncSession التي وضعناها مع الـ Snapshot
                         JobAppState.modals.rating = false;
-                        alert('تم التقييم بنجاح! تم إضافة 5 نقاط إلى محفظتك 🎁');
+                        alert('تم التقييم بنجاح! تم إضافة 5 نقاط إلى حساب شركتك 🎁 وتم احتساب التقييم للموظف.');
                         JobApp.render();
                     } catch(err) {
                         alert("خطأ أثناء تسجيل التقييم: " + err.message);
@@ -1050,7 +1105,7 @@
                                 <div class="flex items-center gap-2 md:gap-3 shrink-0">
                                     ${JobAppState.loggedInUser ? `
                                         <button onclick="JobApp.navigate('${JobAppState.loggedInUser.role === 'employer' ? 'employer_profile' : 'seeker_profile'}')" class="flex items-center gap-2 text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-amber-500/20 font-bold transition-all shadow-lg text-xs md:text-sm">
-                                            <i data-lucide="user" class="w-4 h-4"></i> <span class="hidden sm:inline">${JobAppState.loggedInUser.role === 'employer' ? 'المكافآت' : 'حسابي'}</span>
+                                            <i data-lucide="user" class="w-4 h-4"></i> <span class="hidden sm:inline">${JobAppState.loggedInUser.role === 'employer' ? 'الشركة' : 'حسابي'}</span>
                                         </button>
                                         <button onclick="JobApp.actions.userLogout()" class="flex items-center gap-2 text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-2 md:px-4 md:py-2.5 rounded-xl border border-rose-500/20 transition-all text-xs md:text-sm">
                                             <i data-lucide="log-out" class="w-4 h-4"></i> <span class="hidden sm:inline">خروج</span>
@@ -1098,7 +1153,7 @@
                                 ${JobAppState.adminRecoveryMode ? `
                                     <h2 class="text-2xl font-black text-white mb-4">استعادة كلمة المرور (للمدراء)</h2>
                                     <p class="text-slate-300 text-sm mb-6">أدخل بريدك الإلكتروني الإداري وسنرسل لك رابطاً لإنشاء كلمة مرور جديدة.</p>
-                                    <form onsubmit="JobApp.actions.adminRecoverySubmit(event)" class="space-y-4">
+                                    <form onsubmit="JobApp.actions.adminRecoverySubmit(event)" class="space-y-4" autocomplete="off">
                                         <input name="email" type="email" dir="ltr" required class="w-full px-4 py-3 rounded-xl border border-white/10 bg-black/30 text-white text-base focus:ring-2 focus:ring-emerald-400 outline-none" placeholder="admin@domain.com">
                                         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg">إرسال الرابط</button>
                                         <button type="button" onclick="JobAppState.adminRecoveryMode=false; JobApp.render()" class="w-full text-slate-400 hover:text-white text-sm font-bold mt-2">العودة لتسجيل الدخول</button>
@@ -1111,7 +1166,7 @@
                                         <h2 class="text-2xl font-black text-white mb-2">بوابة الإدارة السرية</h2>
                                         <p class="text-emerald-400 text-sm font-bold">تم تفعيل الدخول الإداري</p>
                                     </div>
-                                    <form onsubmit="JobApp.actions.adminLogin(event)" class="space-y-4">
+                                    <form onsubmit="JobApp.actions.adminLogin(event)" class="space-y-4" autocomplete="off">
                                         <input name="email" type="email" dir="ltr" required class="w-full px-4 py-3 rounded-xl border border-white/10 bg-black/30 text-white text-base focus:ring-2 focus:ring-emerald-400 outline-none" placeholder="admin@domain.com">
                                         <input name="password" type="password" dir="ltr" required class="w-full px-4 py-3 rounded-xl border border-white/10 bg-black/30 text-white text-base focus:ring-2 focus:ring-emerald-400 outline-none" placeholder="••••••••">
                                         <div class="text-left mt-2">
@@ -1187,7 +1242,7 @@
                                         <p class="text-slate-300 text-sm mb-1">إرسال الطلب بصفتك الشركة:</p>
                                         <h4 class="text-white font-bold text-lg">${JobAppState.loggedInUser.name}</h4>
                                     </div>
-                                    <form onsubmit="JobApp.actions.submitHiringRequest(event)">
+                                    <form onsubmit="JobApp.actions.submitHiringRequest(event)" autocomplete="off">
                                         ${!JobAppState.loggedInUser.phone ? `
                                             <div class="mb-4">
                                                 <label class="block text-sm font-bold text-purple-200 mb-1">يرجى إضافة رقم للتواصل لمرة واحدة <span class="text-rose-400">*</span></label>
@@ -1211,7 +1266,7 @@
                                     <h3 class="text-2xl font-black text-white mb-2">تقييم الموظف</h3>
                                     <p class="text-slate-400 text-sm">تقييمك يساعد في تحسين المنصة ويمنحك 5 نقاط!</p>
                                 </div>
-                                <form onsubmit="JobApp.actions.submitRating(event)" class="space-y-6">
+                                <form onsubmit="JobApp.actions.submitRating(event)" class="space-y-6" autocomplete="off">
                                     <div>
                                         <label class="block text-center text-sm font-bold text-white mb-3">اختر التقييم</label>
                                         <div class="flex justify-center gap-2 flex-row-reverse mb-4" dir="ltr">
@@ -1293,7 +1348,7 @@
                                         ${isHired ? `<div class="absolute inset-0 border-4 border-rose-500/50 rounded-2xl pointer-events-none"></div>` : ''}
                                         <h3 class="text-lg md:text-xl font-bold text-blue-400 mb-4 flex items-center justify-between gap-2">
                                             <span class="flex items-center gap-2"><i data-lucide="user" class="w-5 h-5"></i> الموظف</span>
-                                            <button onclick="JobApp.actions.markAsHired('${req.seeker.id}')" class="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors border ${isHired ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-rose-600 text-white border-rose-500 hover:bg-rose-500'}">
+                                            <button onclick="JobApp.actions.markAsHired('${req.seeker.id}')" class="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors border ${isHired ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-rose-600 text-white border-rose-50 hover:bg-rose-500'}">
                                                 <i data-lucide="briefcase" class="inline w-3 h-3 mr-1"></i> ${isHired ? 'إلغاء التوظيف' : 'تم الاتفاق'}
                                             </button>
                                         </h3>
@@ -1407,7 +1462,7 @@
                                     <i data-lucide="plus-circle" class="w-5 h-5 md:w-6 md:h-6 ${isSeeker ? 'text-blue-500' : 'text-purple-500'}"></i> 
                                     إضافة ${isSeeker ? 'طالب وظيفة' : 'شركة'} جديد
                                 </h2>
-                                <form onsubmit="JobApp.actions.adminSubmitNewUser(event)" class="space-y-4">
+                                <form onsubmit="JobApp.actions.adminSubmitNewUser(event)" class="space-y-4" autocomplete="off">
                                     <div><label class="block text-sm text-slate-300 mb-1">الاسم الكامل / الشركة</label><input name="name" required class="w-full px-4 py-3 rounded-lg bg-black/30 border border-slate-700 text-white text-base outline-none"></div>
                                     <div><label class="block text-sm text-slate-300 mb-1">البريد الإلكتروني للولوج</label><input name="email" type="email" required class="w-full px-4 py-3 rounded-lg bg-black/30 border border-slate-700 text-white text-base outline-none text-left" dir="ltr"></div>
                                     <div><label class="block text-sm text-slate-300 mb-1">كلمة المرور الافتراضية</label><input name="password" required value="123456" class="w-full px-4 py-3 rounded-lg bg-black/30 border border-slate-700 text-white text-base outline-none text-left" dir="ltr"></div>
@@ -1694,7 +1749,7 @@
                             
                             <div class="bg-slate-800/50 border border-slate-700 p-6 md:p-8 rounded-3xl">
                                 <h3 class="text-xl md:text-2xl font-bold text-white mb-6 flex items-center gap-2"><i data-lucide="message-square" class="w-5 h-5 text-blue-400"></i> صندوق الشكاوى والمقترحات</h3>
-                                <form onsubmit="JobApp.actions.submitContactMessage(event)" class="space-y-4">
+                                <form onsubmit="JobApp.actions.submitContactMessage(event)" class="space-y-4" autocomplete="off">
                                     <div><label class="block text-xs md:text-sm text-slate-300 mb-1">الاسم</label><input name="name" required class="w-full px-4 py-3 rounded-lg bg-black/30 border border-slate-700 text-white text-base focus:border-blue-400 outline-none"></div>
                                     <div><label class="block text-xs md:text-sm text-slate-300 mb-1">رقم الهاتف أو البريد</label><input name="contact" required class="w-full px-4 py-3 rounded-lg bg-black/30 border border-slate-700 text-white text-base focus:border-blue-400 outline-none text-left" dir="ltr"></div>
                                     <div><label class="block text-xs md:text-sm text-slate-300 mb-1">عنوان الرسالة</label><input name="subject" required class="w-full px-4 py-3 rounded-lg bg-black/30 border border-slate-700 text-white text-base focus:border-blue-400 outline-none"></div>
@@ -1729,14 +1784,14 @@
 
                             let inputHtml = '';
                             if (f.id === 'f3') {
-                                inputHtml = `<input name="${f.id}" value="${val}" type="text" dir="ltr" required pattern="\\d{14}" maxlength="14" minlength="14" title="يجب إدخال 14 رقم فقط" oninput="this.value=this.value.replace(/[^0-9]/g,'');" class="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/20 text-white text-base outline-none focus:border-blue-400 text-left">`;
+                                inputHtml = `<input name="${f.id}" value="${val}" type="text" dir="ltr" required pattern="\\d{14}" maxlength="14" minlength="14" title="يجب إدخال 14 رقم فقط" oninput="this.value=this.value.replace(/[^0-9]/g,'');" class="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/20 text-white text-base outline-none focus:border-blue-400 text-left" autocomplete="off">`;
                             }
                             else if(f.type === 'select') {
-                                inputHtml = `<select name="${f.id}" ${f.required?'required':''} class="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/20 text-white text-base outline-none focus:border-blue-400 appearance-none"><option value="">اختر...</option>${f.options.map(o=>`<option value="${o}" ${val===o?'selected':''} class="bg-slate-900">${o}</option>`).join('')}</select>`;
+                                inputHtml = `<select name="${f.id}" ${f.required?'required':''} class="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/20 text-white text-base outline-none focus:border-blue-400 appearance-none" autocomplete="off"><option value="">اختر...</option>${f.options.map(o=>`<option value="${o}" ${val===o?'selected':''} class="bg-slate-900">${o}</option>`).join('')}</select>`;
                             } else if(f.type === 'textarea') {
-                                inputHtml = `<textarea name="${f.id}" ${f.required?'required':''} rows="3" class="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/20 text-white text-base outline-none focus:border-blue-400 resize-none">${val}</textarea>`;
+                                inputHtml = `<textarea name="${f.id}" ${f.required?'required':''} rows="3" class="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/20 text-white text-base outline-none focus:border-blue-400 resize-none" autocomplete="off">${val}</textarea>`;
                             } else {
-                                inputHtml = `<input name="${f.id}" value="${val}" type="${f.type}" ${f.type==='email' || f.type==='tel' || f.type==='date' ? 'dir="ltr"' : ''} ${f.required?'required':''} class="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/20 text-white text-base outline-none focus:border-blue-400 ${f.type==='email' || f.type==='tel' || f.type==='date' ? 'text-left' : ''}">`;
+                                inputHtml = `<input name="${f.id}" value="${val}" type="${f.type}" ${f.type==='email' || f.type==='tel' || f.type==='date' ? 'dir="ltr"' : ''} ${f.required?'required':''} class="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/20 text-white text-base outline-none focus:border-blue-400 ${f.type==='email' || f.type==='tel' || f.type==='date' ? 'text-left' : ''}" autocomplete="off">`;
                             }
 
                             return `<div class="${fullW}"><label class="block text-xs md:text-sm font-bold text-blue-100 mb-2">${f.label} ${req}</label>${inputHtml}</div>`;
@@ -1773,7 +1828,7 @@
                             <h2 class="text-3xl md:text-4xl font-black text-white mb-2 md:mb-4">ملف طلب الوظيفة</h2>
                             <p class="text-sm md:text-base text-blue-200/80">مرحباً ${JobAppState.loggedInUser.name}، يرجى تحديث هذه البيانات ليظهر ملفك للشركات بشكل احترافي.</p>
                         </div>
-                        <form onsubmit="JobApp.actions.submitSeekerForm(event)">
+                        <form onsubmit="JobApp.actions.submitSeekerForm(event)" autocomplete="off">
                             <div class="flex flex-col items-center mb-6 md:mb-8">
                                 <label class="cursor-pointer group relative">
                                     <div class="w-24 h-24 md:w-32 md:h-32 bg-white/5 rounded-full border-2 border-dashed border-blue-500/50 flex flex-col items-center justify-center text-blue-300 overflow-hidden hover:bg-white/10 transition-all shadow-[0_0_15px_rgba(59,130,246,0.2)]">
@@ -1798,7 +1853,7 @@
                                     <p class="text-xs md:text-sm text-rose-400 mt-1 flex items-center gap-1 font-bold"><i data-lucide="alert-triangle" class="w-3 h-3"></i> يُمنع منعاً باتاً كتابة أرقام، إيميلات، أو روابط لصفحات شخصية وإلا سيتم حظر عرض النبذة.</p>
                                 </div>
                             </div>
-                            <form onsubmit="JobApp.actions.submitSeekerBio(event)">
+                            <form onsubmit="JobApp.actions.submitSeekerBio(event)" autocomplete="off">
                                 <textarea name="bio" rows="5" class="w-full px-4 py-3 rounded-xl bg-black/30 border ${JobAppState.loggedInUser.hasBioViolation ? 'border-rose-500/50 focus:border-rose-400' : 'border-white/20 focus:border-blue-400'} text-white text-base outline-none resize-none mb-4" placeholder="اكتب هنا ملخص عن خبراتك، المهارات التي تتقنها، وسابقة أعمالك السابقة...">${JobAppState.loggedInUser.bio || ''}</textarea>
                                 ${JobAppState.loggedInUser.hasBioViolation ? `<div class="bg-rose-500/10 text-rose-400 p-3 rounded-lg border border-rose-500/20 text-sm mb-4 font-bold flex items-center gap-2"><i data-lucide="lock" class="w-4 h-4"></i> النبذة الحالية موقوفة لوجود بيانات تواصل. الإدارة تراجعها الآن. يمكنك التعديل وإرسالها مجدداً.</div>` : ''}
                                 <button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
@@ -1878,7 +1933,7 @@
                         </div>
                         
                         <div class="glass-panel p-6 md:p-8 rounded-3xl shadow-[0_0_50px_rgba(168,85,247,0.1)] border-purple-500/20">
-                            <form onsubmit="JobApp.actions.submitEmployerProfile(event)">
+                            <form onsubmit="JobApp.actions.submitEmployerProfile(event)" autocomplete="off">
                                 <div class="flex flex-col items-center mb-8">
                                     <label class="cursor-pointer group relative">
                                         <div class="w-24 h-24 md:w-32 md:h-32 bg-white/5 rounded-full border-2 border-dashed border-purple-500/50 flex flex-col items-center justify-center text-purple-300 overflow-hidden hover:bg-white/10 transition-all shadow-[0_0_15px_rgba(168,85,247,0.2)]">
@@ -2033,7 +2088,7 @@
                         ${admin.type === 'super_admin' ? `
                         <div class="bg-slate-800/50 border border-emerald-500/20 p-4 md:p-6 rounded-2xl mb-8 shadow-inner">
                             <h3 class="text-lg md:text-xl font-bold text-emerald-400 mb-4 flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4 md:w-5 md:h-5"></i> تعيين مدير جديد</h3>
-                            <form onsubmit="JobApp.actions.handleAddSystemAdmin(event)" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+                            <form onsubmit="JobApp.actions.handleAddSystemAdmin(event)" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end" autocomplete="off">
                                 <div><label class="block text-xs md:text-sm text-slate-300 mb-1">اسم المدير</label><input name="name" required class="w-full px-4 py-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm outline-none"></div>
                                 <div><label class="block text-xs md:text-sm text-slate-300 mb-1">البريد الإلكتروني</label><input name="email" type="email" dir="ltr" required class="w-full px-4 py-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm outline-none text-left"></div>
                                 <div><label class="block text-xs md:text-sm text-slate-300 mb-1">كلمة المرور</label><input name="password" required class="w-full px-4 py-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm outline-none text-left" dir="ltr"></div>
@@ -2044,7 +2099,7 @@
                         
                         <div class="glass-panel p-4 md:p-6 rounded-2xl">
                             <h3 class="text-lg md:text-xl font-bold text-white mb-4">إعدادات الموقع</h3>
-                            <form onsubmit="JobApp.actions.saveSiteSettings(event)" class="space-y-4 md:space-y-6">
+                            <form onsubmit="JobApp.actions.saveSiteSettings(event)" class="space-y-4 md:space-y-6" autocomplete="off">
                                 <div class="grid sm:grid-cols-2 gap-4">
                                     <div><label class="block text-xs md:text-sm text-slate-300 mb-1">اسم الموقع</label><input name="siteName" value="${JobAppState.siteSettings.name}" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white text-sm" required></div>
                                     <div>
@@ -2154,7 +2209,7 @@
                         </div>
                         <div class="grid gap-4">
                             ${JobAppState.usersSubTab === 'seekers' ? `
-                                ${JobAppState.seekers.length === 0 ? '<p class="text-slate-400 text-center py-8">لا يوجد موظفين مسجلين.</p>' : ''}
+                                ${JobAppState.seekers.length === 0 ? '<p class="text-slate-400 text-center py-8">لا يوجد موفين مسجلين.</p>' : ''}
                                 ${JobAppState.seekers.map(s => `
                                     <div class="glass-panel p-4 md:p-6 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border ${s.isHired ? 'border-rose-500/50 bg-rose-900/10' : (s.hasBioViolation && !s.bioApproved ? 'border-amber-500/50 bg-amber-900/10' : 'border-blue-500/20')}">
                                         <div class="flex items-center gap-4 w-full md:w-auto">
@@ -2205,7 +2260,7 @@
                         tabContent = `
                         <div class="bg-slate-800/50 border border-amber-500/20 p-4 md:p-6 rounded-2xl mb-8">
                             <h3 class="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2"><i data-lucide="plus-circle" class="w-5 h-5"></i> إضافة حقل جديد للاستمارة</h3>
-                            <form onsubmit="JobApp.actions.handleAddNewField(event)" class="space-y-4">
+                            <form onsubmit="JobApp.actions.handleAddNewField(event)" class="space-y-4" autocomplete="off">
                                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                                     <div><label class="block text-xs text-slate-300 mb-1">اسم الحقل (يظهر للمستخدم)</label><input name="label" required class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm outline-none"></div>
                                     <div>
@@ -2265,7 +2320,7 @@
                                 <button onclick="JobApp.actions.setAdFormType('external')" class="text-sm font-bold px-3 py-1.5 rounded-lg ${JobAppState.adFormType==='external' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:bg-white/5'}">رابط خارجي</button>
                                 <button onclick="JobApp.actions.setAdFormType('internal')" class="text-sm font-bold px-3 py-1.5 rounded-lg ${JobAppState.adFormType==='internal' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:bg-white/5'}">صفحة داخلية</button>
                             </div>
-                            <form onsubmit="JobApp.actions.handleAddAd(event)" class="space-y-4">
+                            <form onsubmit="JobApp.actions.handleAddAd(event)" class="space-y-4" autocomplete="off">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div><label class="block text-xs text-slate-300 mb-1">عنوان الإعلان</label><input name="title" required class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-sm outline-none"></div>
                                     <div>
@@ -2340,7 +2395,7 @@
                         <div class="bg-[#0f172a]/95 backdrop-blur-2xl rounded-2xl md:rounded-3xl border border-emerald-500/30 shadow-2xl overflow-hidden">
                             <div class="p-4 md:p-6 border-b border-white/10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                                 <div><h2 class="text-lg md:text-2xl font-black text-emerald-400">أهلاً، ${admin.name}</h2><p class="text-slate-400 text-xs md:text-sm">لوحة الإدارة المركزية</p></div>
-                                <button onclick="JobAppState.loggedInAdmin=null; JobApp.navigate('home')" class="bg-rose-500/20 text-rose-400 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-bold border border-rose-500/30 text-xs md:text-sm">خروج</button>
+                                <button onclick="JobAppState.loggedInAdmin=null; localStorage.removeItem('wzafny_admin'); JobApp.navigate('home')" class="bg-rose-500/20 text-rose-400 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-bold border border-rose-500/30 text-xs md:text-sm">خروج</button>
                             </div>
                             <div class="flex border-b border-white/10 bg-black/20 overflow-x-auto hide-scrollbar snap-x">
                                 <button onclick="JobAppState.adminTab='system_admins'; JobApp.render()" class="shrink-0 snap-start px-4 md:px-6 py-3 md:py-4 font-bold text-xs md:text-sm ${JobAppState.adminTab==='system_admins'?'text-emerald-400 border-b-2 border-emerald-400 bg-emerald-500/10':'text-slate-400 hover:text-white'}">النظام والإعدادات</button>
