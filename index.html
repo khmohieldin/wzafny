@@ -1988,14 +1988,16 @@
                 employer_form() {
                     const currentUserPhone = JobAppState.loggedInUser ? JobAppState.loggedInUser.phone : null;
 
-                    // التعديل هنا: إخفاء الموظفين الذين تم توظيفهم (isHired) من الظهور للشركات
-                    let seekersHtml = JobAppState.seekers.filter(s => s.isVisible && !s.isHired).map(s => {
+                    // إظهار جميع الموظفين المرئيين (مع إبقاء كارت من تم توظيفهم ولكن بتصميم مختلف)
+                    let seekersHtml = JobAppState.seekers.filter(s => s.isVisible).map(s => {
                         
                         // فحص ما إذا كانت الشركة قد طلبت هذا الموظف بالفعل
                         const myReq = JobAppState.requests.find(r => r.seeker.id === s.id && r.employerPhone === currentUserPhone);
                         
                         let actionButtonHtml = '';
-                        if (myReq) {
+                        if (s.isHired) {
+                            actionButtonHtml = `<button disabled class="mt-auto w-full bg-rose-900/40 text-rose-300 font-black py-3 md:py-4 rounded-xl flex items-center justify-center gap-2 text-sm md:text-base border border-rose-500/30 cursor-not-allowed opacity-90"><i data-lucide="briefcase" class="w-4 h-4 md:w-5 md:h-5"></i> تم عقد عمل مع شركة من خلال الموقع</button>`;
+                        } else if (myReq) {
                             if (myReq.isRated) {
                                 actionButtonHtml = `<button disabled class="mt-auto w-full bg-emerald-600/30 text-emerald-400 font-black py-3 md:py-4 rounded-xl flex items-center justify-center gap-2 text-sm md:text-base border border-emerald-500/30 cursor-not-allowed"><i data-lucide="check-circle" class="w-4 h-4 md:w-5 md:h-5"></i> تم التقييم مسبقاً</button>`;
                             } else {
@@ -2005,7 +2007,7 @@
                             actionButtonHtml = `<button onclick="JobApp.actions.openRequestModal('${s.id}')" class="mt-auto w-full bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white font-black py-3 md:py-4 rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.4)] flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform text-sm md:text-base"><i data-lucide="lock" class="w-4 h-4 md:w-5 md:h-5"></i> طلب تعيين (البيانات كاملة)</button>`;
                         }
 
-                        // --- الجديد: استخراج جميع بيانات الاستمارة ديناميكياً وعرضها في الكارت (ماعدا بيانات التواصل) ---
+                        // --- استخراج جميع بيانات الاستمارة ديناميكياً وعرضها في الكارت (ماعدا بيانات التواصل) ---
                         let formDetailsHtml = '';
                         if (s.formData) {
                             const excludedFields = ['f1', 'f15']; // الاسم والوظيفة يظهران بالفعل في رأس الكارت
@@ -2026,14 +2028,14 @@
                         }
 
                         return `
-                        <div class="glass-panel rounded-3xl p-5 md:p-8 hover:border-purple-500/50 transition-all shadow-lg flex flex-col relative overflow-hidden group">
-                            <div class="absolute top-0 left-0 w-1 bg-gradient-to-b from-purple-400 to-fuchsia-600 h-full"></div>
+                        <div class="glass-panel rounded-3xl p-5 md:p-8 hover:border-purple-500/50 transition-all shadow-lg flex flex-col relative overflow-hidden group ${s.isHired ? 'opacity-70 grayscale-[50%]' : ''}">
+                            <div class="absolute top-0 left-0 w-1 ${s.isHired ? 'bg-rose-500' : 'bg-gradient-to-b from-purple-400 to-fuchsia-600'} h-full"></div>
                             <div class="flex justify-between items-start mb-4 md:mb-6">
                                 <div class="flex gap-3 md:gap-4 items-center">
                                     ${s.profileImage ? `<img src="${s.profileImage}" class="w-14 h-14 md:w-16 md:h-16 rounded-xl object-cover border border-purple-500/30 shadow-lg">` : `<div class="w-14 h-14 md:w-16 md:h-16 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-300"><i data-lucide="user" class="w-6 h-6 md:w-8 md:h-8"></i></div>`}
                                     <div>
                                         <div class="flex flex-wrap items-center gap-2 mb-1">
-                                            <h4 class="text-xl md:text-2xl font-black text-white">${(s.name || 'بدون اسم').split(' ')[0]} ***</h4>
+                                            <h4 class="text-xl md:text-2xl font-black text-white">${s.name || 'بدون اسم'} ***</h4>
                                             <span class="bg-rose-500/20 text-rose-300 text-[10px] px-2 py-1 rounded-md border border-rose-500/30 flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i> سرية</span>
                                         </div>
                                         <p class="text-purple-400 font-bold text-sm md:text-lg flex flex-wrap items-center gap-2">
