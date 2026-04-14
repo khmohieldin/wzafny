@@ -189,7 +189,7 @@
             secretClickCount: 0, loggedInAdmin: null, adminRecoveryMode: false, loggedInUser: null, preRegData: { role: 'seeker' }, 
             tempSeekerImage: '', tempIdImage: '', tempCertImage: '', tempAdImage: '', tempRating: 0, lastSubmittedSeeker: null, 
             adFormType: 'external', adminAddUserRole: 'seeker', 
-            modals: { login: false, request: false, rating: false, adDetails: false, adminRequestDetails: null, userDetails: null, adminAddUser: false, bulkAdd: false, employerSeekerDetails: null, imageViewer: null, editField: null },
+            modals: { login: false, request: false, rating: false, adDetails: false, adminRequestDetails: null, userDetails: null, adminAddUser: false, bulkAdd: false, employerSeekerDetails: null, imageViewer: null, editField: null, editAdmin: null },
             selectedItem: null, search: { term: '', filterJob: 'الكل', filterExp: 'الكل' }, adminTab: 'system_admins', usersSubTab: 'seekers', employerSeekersViewMode: 'cards',
 
             systemAdmins: [{ id: 'admin_owner', name: 'خالد محي الدين', role: 'الدعم الفنى (المالك)', email: 'khmohieldin@gmail.com', phone: '01144800777', password: '123456', type: 'super_admin', profileImage: '', color: 'green' }],
@@ -736,10 +736,60 @@
                     JobAppState.modals.bulkAdd = false; 
                     JobApp.render();
                 },
-                async removeSystemAdmin(id) { if(window.confirm('إزالة المدير؟')) { try { if (!JobAppState.isOffline) await deleteDoc(doc(db, 'systemAdmins', id)); else { JobAppState.systemAdmins = JobAppState.systemAdmins.filter(a => a.id !== id); saveLocal('systemAdmins', JobAppState.systemAdmins); JobApp.render(); } } catch(e){} } },
+                async removeSystemAdmin(id) {
+                    const targetAdmin = JobAppState.systemAdmins.find(x => x.id === id);
+                    if (targetAdmin && targetAdmin.email === 'khmohieldin@gmail.com' && JobAppState.loggedInAdmin.email !== 'khmohieldin@gmail.com') {
+                        return alert('ممنوع! غير مصرح لك بحذف المالك الأساسي للموقع.');
+                    }
+                    if(window.confirm('إزالة المدير؟')) { try { if (!JobAppState.isOffline) await deleteDoc(doc(db, 'systemAdmins', id)); else { JobAppState.systemAdmins = JobAppState.systemAdmins.filter(a => a.id !== id); saveLocal('systemAdmins', JobAppState.systemAdmins); JobApp.render(); } } catch(e){} } 
+                },
                 async handleAddSystemAdmin(e) {
                     e.preventDefault(); const newAdmin = { name: e.target.name.value, email: e.target.email.value, password: e.target.password.value, role: e.target.roleType.value === 'super_admin' ? 'مدير عام' : 'مسئول مساعد', type: e.target.roleType.value, color: e.target.roleType.value === 'super_admin' ? 'red' : 'blue' };
                     try { if (!JobAppState.isOffline) await addDoc(collection(db, 'systemAdmins'), newAdmin); else { newAdmin.id = 'admin_' + Date.now(); JobAppState.systemAdmins.push(newAdmin); saveLocal('systemAdmins', JobAppState.systemAdmins); } JobApp.render(); alert("تم الإضافة"); } catch(err){}
+                },
+                openEditAdminModal(id) {
+                    const targetAdmin = JobAppState.systemAdmins.find(x => x.id === id);
+                    if (targetAdmin && targetAdmin.email === 'khmohieldin@gmail.com' && JobAppState.loggedInAdmin.email !== 'khmohieldin@gmail.com') {
+                        return alert('ممنوع! غير مصرح لك بتعديل أو فتح بيانات المالك الأساسي للموقع.');
+                    }
+                    JobAppState.modals.editAdmin = targetAdmin;
+                    JobApp.render();
+                },
+                closeEditAdminModal() {
+                    JobAppState.modals.editAdmin = null;
+                    JobApp.render();
+                },
+                async submitEditAdmin(e) {
+                    e.preventDefault();
+                    if(!JobAppState.modals.editAdmin) return;
+                    const id = JobAppState.modals.editAdmin.id;
+                    const targetAdmin = JobAppState.modals.editAdmin;
+                    if (targetAdmin && targetAdmin.email === 'khmohieldin@gmail.com' && JobAppState.loggedInAdmin.email !== 'khmohieldin@gmail.com') {
+                        return alert('ممنوع! غير مصرح لك بتعديل بيانات المالك الأساسي للموقع.');
+                    }
+                    const updatedAdmin = {
+                        ...JobAppState.modals.editAdmin,
+                        name: e.target.name.value,
+                        email: e.target.email.value,
+                        password: e.target.password.value,
+                        role: e.target.roleType.value === 'super_admin' ? 'مدير عام' : 'مسئول مساعد',
+                        type: e.target.roleType.value,
+                        color: e.target.roleType.value === 'super_admin' ? 'red' : 'blue'
+                    };
+                    try {
+                        if (!JobAppState.isOffline) {
+                            await updateDoc(doc(db, 'systemAdmins', id), updatedAdmin);
+                        } else {
+                            const idx = JobAppState.systemAdmins.findIndex(a => a.id === id);
+                            if(idx > -1) JobAppState.systemAdmins[idx] = updatedAdmin;
+                            saveLocal('systemAdmins', JobAppState.systemAdmins);
+                        }
+                        JobAppState.modals.editAdmin = null;
+                        alert("تم تعديل بيانات المدير بنجاح");
+                        JobApp.render();
+                    } catch(err) {
+                        alert("خطأ أثناء التعديل: " + err.message);
+                    }
                 },
                 async toggleFieldVisibility(id) { const field = JobAppState.formFields.find(f => f.id === id); if(field) { try { if (!JobAppState.isOffline) await updateDoc(doc(db, 'formFields', id), { visible: !field.visible }); else { field.visible = !field.visible; saveLocal('formFields', JobAppState.formFields); JobApp.render(); } } catch(e){} } },
                 async deleteField(id) { if(window.confirm('حذف الحقل؟')) { try { if (!JobAppState.isOffline) await deleteDoc(doc(db, 'formFields', id)); else { JobAppState.formFields = JobAppState.formFields.filter(f => f.id !== id); saveLocal('formFields', JobAppState.formFields); JobApp.render(); } } catch(e){} } },
@@ -841,12 +891,12 @@
                             <div class="flex items-center gap-2">
                                 ${user ? `
                                     <button onclick="JobApp.navigate('${user.role === 'employer' ? 'employer_profile' : 'seeker_profile'}')" class="text-amber-300 bg-amber-500/10 px-3 py-2 rounded-xl font-bold text-xs md:text-sm"><i data-lucide="user" class="inline w-4 h-4"></i> حسابي</button>
-                                    <button onclick="JobApp.actions.userLogout()" class="text-rose-400 bg-rose-500/10 px-3 py-2 rounded-xl text-xs md:text-sm"><i data-lucide="log-out" class="inline w-4 h-4"></i> خروج</button>
+                                    <button onclick="JobApp.actions.userLogout()" class="text-rose-400 bg-rose-500/10 px-3 py-2 rounded-xl text-xs md:text-sm font-bold"><i data-lucide="log-out" class="inline w-4 h-4"></i> خروج</button>
                                 ` : `
                                     <button onclick="JobAppState.modals.userLogin = true; JobApp.render()" class="text-blue-300 bg-blue-600/20 px-4 py-2 rounded-xl font-bold text-sm">دخول</button>
                                     <button onclick="JobApp.actions.startAuth('register', 'seeker')" class="text-cyan-300 bg-cyan-600/20 px-4 py-2 rounded-xl font-bold text-sm">حساب جديد</button>
                                 `}
-                                ${JobAppState.loggedInAdmin ? `<button onclick="JobApp.navigate('admin_dashboard')" class="text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-xl font-bold"><i data-lucide="shield-check" class="w-5 h-5"></i></button>` : ''}
+                                ${JobAppState.loggedInAdmin ? `<button onclick="JobApp.navigate('admin_dashboard')" class="text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-xl font-bold" title="لوحة التحكم"><i data-lucide="shield-check" class="w-5 h-5"></i></button><button onclick="JobApp.actions.userLogout()" class="text-rose-400 bg-rose-500/10 px-3 py-2 rounded-xl font-bold mr-1" title="خروج الإدارة"><i data-lucide="log-out" class="w-5 h-5"></i></button>` : ''}
                                 <button onclick="document.getElementById('mobile-menu').classList.toggle('hidden')" class="lg:hidden flex items-center justify-center text-white bg-white/5 p-2 rounded-xl border border-white/10"><i data-lucide="menu" class="w-5 h-5"></i></button>
                             </div>
                         </div>
@@ -1048,6 +1098,29 @@
                                     <div><label class="block text-xs sm:text-sm text-slate-300 mb-1">خيارات القائمة (إن وجدت، مفصولة بفاصلة)</label><input name="optionsString" value="${f.options ? f.options.join(', ') : ''}" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white outline-none focus:border-amber-400 text-sm sm:text-base"></div>
                                     <div class="flex items-center gap-2 mt-4 pb-2"><input type="checkbox" name="required" id="reqEditField" class="w-4 h-4 sm:w-5 sm:h-5 accent-amber-500 rounded" ${f.required?'checked':''}><label for="reqEditField" class="text-xs sm:text-sm font-bold text-white cursor-pointer">هل الإجابة إجبارية؟</label></div>
                                     <button type="submit" class="w-full mt-4 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm sm:text-base"><i data-lucide="save" class="w-4 h-4 sm:w-5 sm:h-5"></i> حفظ التعديلات</button>
+                                </form>
+                            </div>
+                        </div>`;
+                    }
+                    if (JobAppState.modals.editAdmin) {
+                        const admin = JobAppState.modals.editAdmin;
+                        html += `
+                        <div class="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm fade-in">
+                            <div class="bg-slate-900 border border-emerald-500/50 p-4 sm:p-6 md:p-8 rounded-3xl shadow-2xl max-w-lg w-[95%] sm:w-full relative max-h-[90vh] overflow-y-auto hide-scrollbar">
+                                <button onclick="JobApp.actions.closeEditAdminModal()" class="absolute top-4 left-4 text-slate-400 hover:text-white"><i data-lucide="x" class="w-5 h-5"></i></button>
+                                <h2 class="text-lg sm:text-xl md:text-2xl font-black text-white mb-6 border-b border-white/10 pb-4 flex items-center gap-2"><i data-lucide="edit" class="text-emerald-400 w-5 h-5 sm:w-6 sm:h-6"></i> تعديل بيانات الإدارة</h2>
+                                <form onsubmit="JobApp.actions.submitEditAdmin(event)" class="space-y-4" autocomplete="off">
+                                    <div><label class="block text-xs sm:text-sm text-slate-300 mb-1">الاسم</label><input name="name" value="${admin.name}" required class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white outline-none focus:border-emerald-400 text-sm sm:text-base"></div>
+                                    <div><label class="block text-xs sm:text-sm text-slate-300 mb-1">الإيميل</label><input name="email" type="email" value="${admin.email}" required class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white outline-none focus:border-emerald-400 text-sm sm:text-base text-left" dir="ltr"></div>
+                                    <div><label class="block text-xs sm:text-sm text-slate-300 mb-1">الرقم السري</label><input name="password" value="${admin.password}" required class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white outline-none focus:border-emerald-400 text-sm sm:text-base text-left" dir="ltr"></div>
+                                    <div>
+                                        <label class="block text-xs sm:text-sm text-slate-300 mb-1">الصلاحية</label>
+                                        <select name="roleType" class="w-full px-4 py-2 rounded-lg bg-black/30 border border-slate-700 text-white outline-none focus:border-emerald-400 text-sm sm:text-base">
+                                            <option value="super_admin" ${admin.type === 'super_admin' ? 'selected' : ''}>مدير عام</option>
+                                            <option value="sub_admin" ${admin.type === 'sub_admin' ? 'selected' : ''}>مسئول مساعد</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" class="w-full mt-4 bg-emerald-500 hover:bg-emerald-400 text-white font-bold py-3 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-sm sm:text-base"><i data-lucide="save" class="w-4 h-4 sm:w-5 sm:h-5"></i> حفظ التعديلات</button>
                                 </form>
                             </div>
                         </div>`;
@@ -1529,7 +1602,10 @@
                                         <p class="text-slate-300 text-xs sm:text-sm mb-1">${a.role}</p>
                                         <p class="text-slate-400 text-[10px] sm:text-xs font-mono">${a.email}</p>
                                     </div>
-                                    ${a.type !== 'super_admin' ? `<button onclick="JobApp.actions.removeSystemAdmin('${a.id}')" class="text-rose-500 hover:text-rose-400 p-1 sm:p-2"><i data-lucide="trash-2" class="w-4 h-4 sm:w-5 sm:h-5"></i></button>` : ''}
+                                    <div class="flex gap-1.5 sm:gap-2 shrink-0">
+                                        ${admin.type === 'super_admin' ? (a.email === 'khmohieldin@gmail.com' && admin.email !== 'khmohieldin@gmail.com' ? `<button type="button" onclick="alert('ممنوع! هذا الحساب محمي للمالك الأساسي فقط.')" class="text-slate-500 p-1.5 sm:p-2 bg-black/20 rounded-lg border border-slate-700 cursor-not-allowed" title="حساب محمي"><i data-lucide="shield-alert" class="w-4 h-4 sm:w-5 sm:h-5"></i></button>` : `<button onclick="JobApp.actions.openEditAdminModal('${a.id}')" class="text-amber-400 hover:text-amber-300 p-1.5 sm:p-2 bg-black/20 rounded-lg transition-colors border border-amber-500/30" title="تعديل بيانات المدير"><i data-lucide="edit" class="w-4 h-4 sm:w-5 sm:h-5"></i></button>`) : ''}
+                                        ${a.type !== 'super_admin' && admin.type === 'super_admin' ? `<button onclick="JobApp.actions.removeSystemAdmin('${a.id}')" class="text-rose-500 hover:text-rose-400 p-1.5 sm:p-2 bg-black/20 rounded-lg transition-colors border border-rose-500/30" title="حذف المدير"><i data-lucide="trash-2" class="w-4 h-4 sm:w-5 sm:h-5"></i></button>` : ''}
+                                    </div>
                                 </div>
                                 `).join('')}
                             </div>
@@ -1753,9 +1829,9 @@
                                             </div>
                                         </div>
                                         <div class="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 w-full md:w-auto">
-                                            <button onclick="JobApp.actions.openEditFieldModal('${f.id}')" class="flex-1 sm:flex-none px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-bold border bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/30 flex items-center justify-center"><i data-lucide="edit-3" class="inline w-3 h-3 mr-1"></i>تعديل</button>
-                                            <button onclick="JobApp.actions.toggleFieldVisibility('${f.id}')" class="flex-1 sm:flex-none px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-bold border flex items-center justify-center ${f.visible ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}">${f.visible ? 'ظاهر' : 'مخفي'}</button>
-                                            <button onclick="JobApp.actions.deleteField('${f.id}')" class="bg-rose-500/10 text-rose-400 p-1.5 sm:p-2.5 rounded-lg border border-rose-500/30 flex items-center justify-center shrink-0"><i data-lucide="trash-2" class="w-3 h-3 sm:w-4 sm:h-4"></i></button>
+                                            <button onclick="JobApp.actions.openEditFieldModal('${f.id}')" class="flex-1 sm:flex-none px-2 sm:px-4 py-2 rounded-lg text-[10px] sm:text-xs font-bold border bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center justify-center gap-1"><i data-lucide="edit" class="w-3 h-3 sm:w-4 sm:h-4"></i> تعديل</button>
+                                            <button onclick="JobApp.actions.toggleFieldVisibility('${f.id}')" class="flex-1 sm:flex-none px-2 sm:px-4 py-2 rounded-lg text-[10px] sm:text-xs font-bold border flex items-center justify-center gap-1 ${f.visible ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}"><i data-lucide="${f.visible ? 'eye' : 'eye-off'}" class="w-3 h-3 sm:w-4 sm:h-4"></i> ${f.visible ? 'مرئي' : 'مخفي'}</button>
+                                            <button onclick="JobApp.actions.deleteField('${f.id}')" class="bg-slate-800 text-slate-400 hover:text-white hover:bg-rose-600 px-2 sm:px-3 py-2 rounded-lg text-[10px] sm:text-xs font-bold shrink-0 flex items-center justify-center transition-colors border border-slate-700 hover:border-rose-500" title="حذف الحقل"><i data-lucide="trash-2" class="w-3 h-3 sm:w-4 sm:h-4"></i></button>
                                         </div>
                                     </div>
                                 `).join('')}
@@ -1764,112 +1840,141 @@
                         `;
                     }
 
-                    if (JobAppState.adminTab === 'ads') {
+                    // Ads & Notifications Tab
+                    if (admin.type === 'super_admin' && JobAppState.adminTab === 'ads') {
                         tabContent = `
                         <div class="bg-black/30 border border-blue-500/30 p-4 sm:p-6 md:p-8 rounded-3xl mb-6 sm:mb-8 shadow-lg">
-                            <h3 class="text-lg sm:text-xl font-bold text-blue-400 mb-4 sm:mb-6 flex items-center gap-2"><i data-lucide="plus-circle" class="w-5 h-5 sm:w-6 sm:h-6"></i> إضافة إعلان جديد</h3>
-                            <div class="flex gap-2 sm:gap-4 mb-4 sm:mb-6">
-                                <button onclick="JobApp.actions.setAdFormType('external')" class="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg font-bold border transition-colors text-xs sm:text-sm ${JobAppState.adFormType==='external'?'bg-blue-600 text-white border-blue-600':'border-blue-500/50 text-blue-400 hover:bg-blue-500/10'}">رابط خارجي</button>
-                                <button onclick="JobApp.actions.setAdFormType('internal')" class="flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg font-bold border transition-colors text-xs sm:text-sm ${JobAppState.adFormType==='internal'?'bg-blue-600 text-white border-blue-600':'border-blue-500/50 text-blue-400 hover:bg-blue-500/10'}">صفحة داخلية</button>
+                            <h3 class="text-lg sm:text-xl md:text-2xl font-black text-blue-400 mb-4 sm:mb-6 border-b border-white/10 pb-4"><i data-lucide="megaphone" class="inline w-5 h-5 sm:w-6 sm:h-6 mr-1 sm:mr-2"></i> إضافة إعلان جديد</h3>
+                            <div class="flex gap-2 mb-4">
+                                <button onclick="JobApp.actions.setAdFormType('external')" class="px-4 py-2 rounded-xl font-bold text-sm transition-colors ${JobAppState.adFormType === 'external' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}">رابط خارجي</button>
+                                <button onclick="JobApp.actions.setAdFormType('internal')" class="px-4 py-2 rounded-xl font-bold text-sm transition-colors ${JobAppState.adFormType === 'internal' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400'}">صفحة داخلية مخصصة</button>
                             </div>
-                            <form onsubmit="JobApp.actions.handleAddAd(event)" class="space-y-4">
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div><label class="block text-xs sm:text-sm text-slate-300 mb-1">عنوان الإعلان</label><input name="title" required class="w-full px-3 sm:px-4 py-2 rounded-lg bg-black/40 border border-slate-700 text-white text-sm sm:text-base"></div>
-                                    <div>
-                                        <label class="block text-xs sm:text-sm text-slate-300 mb-1">صورة الإعلان</label>
-                                        <div class="flex flex-col sm:flex-row items-center gap-2">
-                                            <input name="imageUrl" type="url" placeholder="رابط الصورة (أو ارفعها)" class="w-full px-3 sm:px-4 py-2 rounded-lg bg-black/40 border border-slate-700 text-white text-xs sm:text-sm" dir="ltr">
-                                            <label class="bg-blue-600 hover:bg-blue-500 text-white px-3 sm:px-4 py-2 rounded-lg cursor-pointer shrink-0 w-full sm:w-auto text-center text-xs sm:text-sm flex items-center justify-center gap-1"><i data-lucide="upload" class="w-4 h-4"></i> رفع</label><input type="file" accept="image/*" class="hidden" onchange="JobApp.actions.uploadImage(this, 'tempAdImage')">
-                                        </div>
-                                        ${JobAppState.tempAdImage ? `<div class="mt-2"><img src="${JobAppState.tempAdImage}" class="h-16 rounded object-cover border border-slate-600"></div>` : ''}
+                            <form onsubmit="JobApp.actions.handleAddAd(event)" class="space-y-4 sm:space-y-6" autocomplete="off">
+                                <div><label class="block text-xs sm:text-sm font-bold text-slate-300 mb-1 sm:mb-2">عنوان الإعلان</label><input name="title" required class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none"></div>
+                                <div class="flex items-center gap-4">
+                                    <label class="cursor-pointer bg-white/5 border border-dashed border-blue-500/50 p-4 rounded-xl flex items-center justify-center gap-2 hover:bg-white/10 transition-colors w-1/3">
+                                        <i data-lucide="image" class="text-blue-400"></i><span class="text-xs sm:text-sm text-blue-300 font-bold">رفع صورة</span>
+                                        <input type="file" accept="image/*" class="hidden" onchange="JobApp.actions.uploadImage(this, 'tempAdImage')">
+                                    </label>
+                                    <div class="flex-grow">
+                                        <label class="block text-xs sm:text-sm font-bold text-slate-300 mb-1">أو رابط الصورة الخارجي</label>
+                                        <input name="imageUrl" dir="ltr" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none text-left">
                                     </div>
                                 </div>
+                                ${JobAppState.tempAdImage ? `<div class="w-24 h-24 rounded-xl overflow-hidden border-2 border-blue-500/50"><img src="${JobAppState.tempAdImage}" class="w-full h-full object-cover"></div>` : ''}
+
                                 ${JobAppState.adFormType === 'external' ? `
-                                    <div><label class="block text-xs sm:text-sm text-slate-300 mb-1">وصف قصير</label><textarea name="description" required rows="2" class="w-full px-3 sm:px-4 py-2 rounded-lg bg-black/40 border border-slate-700 text-white resize-none text-sm sm:text-base"></textarea></div>
-                                    <div><label class="block text-xs sm:text-sm text-slate-300 mb-1">الرابط الوجهة (Link)</label><input name="link" type="url" required class="w-full px-3 sm:px-4 py-2 rounded-lg bg-black/40 border border-slate-700 text-white text-sm sm:text-base" dir="ltr"></div>
+                                    <div><label class="block text-xs sm:text-sm font-bold text-slate-300 mb-1 sm:mb-2">وصف قصير</label><input name="description" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none"></div>
+                                    <div><label class="block text-xs sm:text-sm font-bold text-slate-300 mb-1 sm:mb-2">الرابط المباشر للموقع/الإعلان</label><input name="link" type="url" dir="ltr" required class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none text-left"></div>
                                 ` : `
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div><label class="block text-xs sm:text-sm text-slate-300 mb-1">عنوان الصفحة الداخلية</label><input name="pageTitle" required class="w-full px-3 sm:px-4 py-2 rounded-lg bg-black/40 border border-slate-700 text-white text-sm sm:text-base"></div>
-                                        <div><label class="block text-xs sm:text-sm text-slate-300 mb-1">رقم واتساب للتواصل</label><input name="whatsapp" type="tel" class="w-full px-3 sm:px-4 py-2 rounded-lg bg-black/40 border border-slate-700 text-white text-sm sm:text-base" dir="ltr"></div>
+                                        <div><label class="block text-xs sm:text-sm font-bold text-slate-300 mb-1">عنوان الصفحة الداخلية</label><input name="pageTitle" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none"></div>
+                                        <div class="flex gap-4">
+                                            <div class="w-1/2"><label class="block text-xs sm:text-sm font-bold text-slate-300 mb-1">لون الخلفية</label><input type="color" name="bgColor" value="#050814" class="w-full h-12 rounded-xl bg-slate-900 border border-slate-700"></div>
+                                            <div class="w-1/2"><label class="block text-xs sm:text-sm font-bold text-slate-300 mb-1">لون النص</label><input type="color" name="textColor" value="#ffffff" class="w-full h-12 rounded-xl bg-slate-900 border border-slate-700"></div>
+                                        </div>
                                     </div>
-                                    <div><label class="block text-xs sm:text-sm text-slate-300 mb-1">محتوى الصفحة</label><textarea name="pageContent" required rows="3" class="w-full px-3 sm:px-4 py-2 rounded-lg bg-black/40 border border-slate-700 text-white resize-none text-sm sm:text-base"></textarea></div>
+                                    <div><label class="block text-xs sm:text-sm font-bold text-slate-300 mb-1">محتوى الصفحة بالتفصيل</label><textarea name="pageContent" required rows="6" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none resize-y"></textarea></div>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div><label class="block text-xs sm:text-sm font-bold text-slate-300 mb-1">رقم واتساب للتواصل</label><input name="whatsapp" type="tel" dir="ltr" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none text-left"></div>
+                                        <div><label class="block text-xs sm:text-sm font-bold text-slate-300 mb-1">رابط زر إضافي (اختياري)</label><input name="urlLink" type="url" dir="ltr" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none text-left"></div>
+                                        <div><label class="block text-xs sm:text-sm font-bold text-slate-300 mb-1">نص الزر الإضافي</label><input name="urlText" class="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white outline-none"></div>
+                                    </div>
                                 `}
-                                <div class="mt-4 sm:mt-6 flex justify-center sm:justify-end">
-                                    <button type="submit" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all text-sm sm:text-base"><i data-lucide="plus" class="w-4 h-4 sm:w-5 sm:h-5"></i> نشر الإعلان</button>
-                                </div>
+                                <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-lg flex items-center justify-center gap-2"><i data-lucide="plus" class="w-5 h-5"></i> نشر الإعلان</button>
                             </form>
                         </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                            ${JobAppState.ads.map(ad => `
-                                <div class="glass-panel p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-white/10 shadow-lg flex flex-col">
-                                    <img src="${ad.imageUrl}" class="w-full h-32 sm:h-40 object-cover rounded-xl sm:rounded-2xl mb-3 sm:mb-4 border border-white/5">
-                                    <h4 class="text-white font-bold text-base sm:text-lg mb-1 sm:mb-2">${ad.title}</h4>
-                                    <p class="text-slate-400 text-xs sm:text-sm mb-3 sm:mb-4 line-clamp-2 flex-grow">${ad.type==='external'?ad.description:ad.pageTitle}</p>
-                                    <button onclick="JobApp.actions.deleteAd('${ad.id}')" class="bg-rose-500/20 text-rose-400 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-bold hover:bg-rose-500 hover:text-white transition-colors w-full flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm"><i data-lucide="trash-2" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i> حذف الإعلان</button>
-                                </div>
-                            `).join('')}
-                            ${JobAppState.ads.length === 0 ? '<div class="col-span-full text-center p-8 sm:p-12 bg-black/20 rounded-3xl border border-dashed border-white/10 text-slate-400 text-sm sm:text-lg font-bold">لا توجد إعلانات منشورة.</div>' : ''}
+
+                        <div class="glass-panel p-4 sm:p-6 rounded-3xl border border-white/10">
+                            <h3 class="text-base sm:text-lg font-bold text-white mb-4">الإعلانات النشطة (${JobAppState.ads.length})</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                ${JobAppState.ads.map(ad => `
+                                    <div class="bg-black/40 rounded-xl overflow-hidden border border-white/10 group relative">
+                                        <img src="${ad.imageUrl}" class="w-full h-32 object-cover opacity-80 group-hover:opacity-100 transition-opacity">
+                                        <div class="p-3">
+                                            <h4 class="text-white font-bold text-sm truncate mb-1">${ad.title}</h4>
+                                            <p class="text-xs text-blue-400">${ad.type === 'external' ? 'رابط خارجي' : 'صفحة مخصصة'}</p>
+                                        </div>
+                                        <button onclick="JobApp.actions.deleteAd('${ad.id}')" class="absolute top-2 left-2 bg-rose-600 hover:bg-rose-500 text-white p-1.5 rounded-lg shadow-lg"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                    </div>
+                                `).join('')}
+                            </div>
                         </div>
                         `;
                     }
 
-                    if (JobAppState.adminTab === 'messages') {
+                    if (admin.type === 'super_admin' && JobAppState.adminTab === 'messages') {
                         tabContent = `
-                        <div class="mb-4 sm:mb-6"><h3 class="text-lg sm:text-xl font-bold text-blue-400 flex items-center gap-2"><i data-lucide="mail" class="w-5 h-5 sm:w-6 sm:h-6"></i> رسائل صندوق الوارد</h3></div>
-                        <div class="grid gap-3 sm:gap-4">
-                            ${JobAppState.messages.length === 0 ? '<div class="text-center p-8 sm:p-12 text-slate-400 bg-black/20 rounded-3xl border border-dashed border-white/10 font-bold text-sm sm:text-lg">لا توجد رسائل واردة حالياً</div>' : ''}
-                            ${JobAppState.messages.map(m => `
-                                <div class="glass-panel p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/5 shadow-lg relative">
-                                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
-                                        <div>
-                                            <h4 class="text-white font-bold text-base sm:text-xl flex items-center gap-2"><i data-lucide="message-square" class="w-4 h-4 sm:w-5 sm:h-5 text-blue-400"></i> ${m.subject}</h4>
-                                            <div class="text-[10px] sm:text-sm text-slate-400 mt-2 bg-black/30 p-2 rounded-lg inline-block border border-white/5 w-full sm:w-auto">
-                                                من: <span class="font-bold text-slate-200 mr-1 sm:mr-2">${m.name}</span> | 
-                                                تواصل: <span dir="ltr" class="font-bold text-blue-300 ml-1 sm:ml-2 inline-flex items-center gap-1 sm:gap-2">
-                                                    ${m.contact}
-                                                    <a href="tel:${m.contact}" class="text-blue-400 hover:text-white"><i data-lucide="phone" class="w-3 h-3 sm:w-4 sm:h-4"></i></a>
-                                                    <a href="${JobApp.whatsappLink(m.contact)}" target="_blank" class="text-green-400 hover:text-white"><i data-lucide="message-circle" class="w-3 h-3 sm:w-4 sm:h-4"></i></a>
-                                                </span>
+                        <div class="glass-panel p-4 sm:p-6 md:p-8 rounded-3xl border border-white/10 shadow-lg">
+                            <h3 class="text-lg sm:text-xl md:text-2xl font-bold text-white mb-4 sm:mb-6 flex items-center gap-2"><i data-lucide="message-square" class="text-blue-400 w-5 h-5 sm:w-6 sm:h-6"></i> صندوق الرسائل والشكاوى</h3>
+                            <div class="grid gap-3 sm:gap-4">
+                                ${JobAppState.messages.length === 0 ? '<div class="text-center text-slate-400 py-8 border border-dashed border-white/10 rounded-2xl bg-black/20 font-bold">لا توجد رسائل جديدة.</div>' : ''}
+                                ${JobAppState.messages.map(m => `
+                                    <div class="bg-black/30 p-4 sm:p-6 rounded-2xl border border-white/5 hover:border-blue-500/30 transition-colors">
+                                        <div class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
+                                            <div>
+                                                <h4 class="text-white font-black text-sm sm:text-base mb-1">${m.subject}</h4>
+                                                <div class="text-[10px] sm:text-xs text-slate-400 flex flex-wrap gap-2 items-center">
+                                                    <span class="text-blue-300 font-bold"><i data-lucide="user" class="inline w-3 h-3"></i> ${m.name}</span> | 
+                                                    <span dir="ltr" class="font-mono text-emerald-400"><i data-lucide="phone" class="inline w-3 h-3"></i> ${m.contact}</span> | 
+                                                    <span>${m.date}</span>
+                                                </div>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <a href="${JobApp.whatsappLink(m.contact)}" target="_blank" class="bg-green-600/20 text-green-400 hover:bg-green-600 hover:text-white p-2 rounded-xl transition-colors"><i data-lucide="message-circle" class="w-4 h-4"></i></a>
+                                                <button onclick="JobApp.actions.deleteMessage('${m.id}')" class="bg-rose-600/20 text-rose-400 hover:bg-rose-600 hover:text-white p-2 rounded-xl transition-colors"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                                             </div>
                                         </div>
-                                        <span class="text-[10px] sm:text-xs font-bold text-slate-500 bg-black/40 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-white/5 shrink-0 self-start"><i data-lucide="calendar" class="inline w-3 h-3 mr-1"></i> ${m.date}</span>
+                                        <p class="text-slate-300 text-xs sm:text-sm whitespace-pre-wrap leading-relaxed bg-black/20 p-3 sm:p-4 rounded-xl border border-white/5">${m.content}</p>
                                     </div>
-                                    <div class="bg-black/30 p-3 sm:p-5 rounded-xl sm:rounded-2xl text-slate-300 text-xs sm:text-sm whitespace-pre-wrap leading-relaxed border border-white/5 border-l-4 border-l-blue-500">${m.content}</div>
-                                    <div class="mt-3 sm:mt-4 flex justify-end">
-                                        <button onclick="JobApp.actions.deleteMessage('${m.id}')" class="bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[10px] sm:text-sm font-bold flex items-center gap-1.5 sm:gap-2 transition-colors"><i data-lucide="trash-2" class="w-3 h-3 sm:w-4 sm:h-4"></i> حذف الرسالة نهائياً</button>
-                                    </div>
-                                </div>
-                            `).join('')}
+                                `).join('')}
+                            </div>
                         </div>
                         `;
                     }
-                    
+
                     return `
-                    <div class="max-w-7xl mx-auto px-2 sm:px-4 pt-4 sm:pt-6 md:pt-10 pb-16 fade-in w-full">
-                        <div class="flex flex-nowrap sm:flex-wrap gap-2 mb-4 sm:mb-6 md:mb-8 bg-black/30 p-2 md:p-3 rounded-2xl border border-white/5 overflow-x-auto hide-scrollbar shadow-inner items-center">
-                            ${admin.type === 'super_admin' ? `<button onclick="JobAppState.adminTab='system_admins'; JobApp.render()" class="shrink-0 sm:shrink px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-[10px] sm:text-xs md:text-sm flex items-center justify-center gap-1.5 sm:gap-2 ${JobAppState.adminTab==='system_admins'?'bg-emerald-600 text-white shadow-lg':'text-slate-400 hover:bg-white/5 hover:text-white'}"><i data-lucide="shield" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i> المدراء</button>` : ''}
-                            <button onclick="JobAppState.adminTab='requests'; JobApp.render()" class="shrink-0 sm:shrink px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-[10px] sm:text-xs md:text-sm flex items-center justify-center gap-1.5 sm:gap-2 ${JobAppState.adminTab==='requests'?'bg-blue-600 text-white shadow-lg':'text-slate-400 hover:bg-white/5 hover:text-white'}"><i data-lucide="briefcase" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i> الطلبات <span class="bg-blue-800 text-white px-1.5 sm:px-2 py-0.5 rounded-full text-[8px] sm:text-[10px] ml-1">${JobAppState.requests.length}</span></button>
-                            <button onclick="JobAppState.adminTab='users'; JobAppState.usersSubTab='seekers'; JobApp.render()" class="shrink-0 sm:shrink px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-[10px] sm:text-xs md:text-sm flex items-center justify-center gap-1.5 sm:gap-2 ${JobAppState.adminTab==='users'?'bg-purple-600 text-white shadow-lg':'text-slate-400 hover:bg-white/5 hover:text-white'}"><i data-lucide="users" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i> البيانات</button>
-                            ${admin.type === 'super_admin' ? `
-                                <button onclick="JobAppState.adminTab='settings'; JobApp.render()" class="shrink-0 sm:shrink px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-[10px] sm:text-xs md:text-sm flex items-center justify-center gap-1.5 sm:gap-2 ${JobAppState.adminTab==='settings'?'bg-emerald-600 text-white shadow-lg':'text-slate-400 hover:bg-white/5 hover:text-white'}"><i data-lucide="settings" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i> الإعدادات</button>
-                                <button onclick="JobAppState.adminTab='form_builder'; JobApp.render()" class="shrink-0 sm:shrink px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-[10px] sm:text-xs md:text-sm flex items-center justify-center gap-1.5 sm:gap-2 ${JobAppState.adminTab==='form_builder'?'bg-amber-600 text-white shadow-lg':'text-slate-400 hover:bg-white/5 hover:text-white'}"><i data-lucide="layout-list" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i> الاستمارة</button>
-                                <button onclick="JobAppState.adminTab='ads'; JobApp.render()" class="shrink-0 sm:shrink px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-[10px] sm:text-xs md:text-sm flex items-center justify-center gap-1.5 sm:gap-2 ${JobAppState.adminTab==='ads'?'bg-emerald-600 text-white shadow-lg':'text-slate-400 hover:bg-white/5 hover:text-white'}"><i data-lucide="megaphone" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i> الإعلانات</button>
-                                <button onclick="JobAppState.adminTab='messages'; JobApp.render()" class="shrink-0 sm:shrink px-3 sm:px-4 md:px-6 py-2.5 sm:py-3 rounded-xl font-bold text-[10px] sm:text-xs md:text-sm flex items-center justify-center gap-1.5 sm:gap-2 ${JobAppState.adminTab==='messages'?'bg-rose-600 text-white shadow-lg':'text-slate-400 hover:bg-white/5 hover:text-white'}"><i data-lucide="mail" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i> الرسائل</button>
-                            ` : ''}
-                        </div>
-                        <div class="w-full">
-                            ${tabContent}
-                        </div>
+                    <div class="max-w-7xl mx-auto px-2 sm:px-4 pt-4 sm:pt-8 pb-10 fade-in flex flex-col md:flex-row gap-4 sm:gap-6">
+                        <aside class="w-full md:w-64 shrink-0">
+                            <div class="glass-panel rounded-3xl p-4 sticky top-24 shadow-xl border border-white/10">
+                                <div class="text-center mb-4 pb-4 border-b border-white/10">
+                                    <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-2 border border-emerald-500/30">
+                                        <i data-lucide="shield-check" class="w-6 h-6 sm:w-8 sm:h-8"></i>
+                                    </div>
+                                    <h2 class="text-white font-black text-sm sm:text-base truncate">${admin.name}</h2>
+                                    <span class="text-[10px] sm:text-xs font-bold text-emerald-400">${admin.role}</span>
+                                </div>
+                                <nav class="flex flex-col gap-1.5 sm:gap-2">
+                                    <button onclick="JobAppState.adminTab='system_admins'; JobApp.render()" class="w-full text-right px-4 py-2.5 sm:py-3 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center gap-3 ${JobAppState.adminTab==='system_admins' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}"><i data-lucide="shield" class="w-4 h-4 sm:w-5 sm:h-5"></i> مدراء النظام</button>
+                                    <button onclick="JobAppState.adminTab='users'; JobApp.render()" class="w-full text-right px-4 py-2.5 sm:py-3 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center gap-3 ${JobAppState.adminTab==='users' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}"><i data-lucide="users" class="w-4 h-4 sm:w-5 sm:h-5"></i> الأعضاء (${JobAppState.seekers.length + JobAppState.employers.length})</button>
+                                    <button onclick="JobAppState.adminTab='requests'; JobApp.render()" class="w-full text-right px-4 py-2.5 sm:py-3 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center justify-between ${JobAppState.adminTab==='requests' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}">
+                                        <div class="flex items-center gap-3"><i data-lucide="briefcase" class="w-4 h-4 sm:w-5 sm:h-5"></i> الطلبات</div>
+                                        ${JobAppState.requests.length > 0 ? `<span class="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">${JobAppState.requests.length}</span>` : ''}
+                                    </button>
+                                    ${admin.type === 'super_admin' ? `
+                                        <button onclick="JobAppState.adminTab='messages'; JobApp.render()" class="w-full text-right px-4 py-2.5 sm:py-3 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center justify-between ${JobAppState.adminTab==='messages' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}">
+                                            <div class="flex items-center gap-3"><i data-lucide="mail" class="w-4 h-4 sm:w-5 sm:h-5"></i> الرسائل</div>
+                                            ${JobAppState.messages.length > 0 ? `<span class="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">${JobAppState.messages.length}</span>` : ''}
+                                        </button>
+                                        <button onclick="JobAppState.adminTab='ads'; JobApp.render()" class="w-full text-right px-4 py-2.5 sm:py-3 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center gap-3 ${JobAppState.adminTab==='ads' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}"><i data-lucide="megaphone" class="w-4 h-4 sm:w-5 sm:h-5"></i> الإعلانات (${JobAppState.ads.length})</button>
+                                        <div class="h-px bg-white/10 my-2"></div>
+                                        <button onclick="JobAppState.adminTab='form_builder'; JobApp.render()" class="w-full text-right px-4 py-2.5 sm:py-3 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center gap-3 ${JobAppState.adminTab==='form_builder' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-amber-400'}"><i data-lucide="layout-template" class="w-4 h-4 sm:w-5 sm:h-5"></i> مصمم الاستمارة</button>
+                                        <button onclick="JobAppState.adminTab='settings'; JobApp.render()" class="w-full text-right px-4 py-2.5 sm:py-3 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center gap-3 ${JobAppState.adminTab==='settings' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-emerald-400'}"><i data-lucide="settings" class="w-4 h-4 sm:w-5 sm:h-5"></i> الإعدادات الأساسية</button>
+                                    ` : ''}
+                                </nav>
+                            </div>
+                        </aside>
+                        <div class="flex-grow min-w-0">${tabContent}</div>
                     </div>`;
                 },
-
+                
                 success() {
                     let pdfBtnHtml = '';
-                    if(JobAppState.lastSubmittedSeeker) {
+                    if (JobAppState.lastSubmittedSeeker) {
                         pdfBtnHtml = `
-                        <button onclick="JobApp.actions.downloadPDF()" class="mt-4 bg-emerald-600 text-white font-bold px-6 md:px-8 py-3 md:py-4 rounded-xl w-full hover:bg-emerald-500 flex items-center justify-center gap-2 shadow-lg transition-all hover:-translate-y-1 text-sm md:text-base">
-                            <i data-lucide="download" class="w-4 h-4 md:w-5 md:h-5"></i> تحميل الاستمارة (PDF)
-                        </button>
+                            <button onclick="JobApp.actions.downloadPDF()" class="bg-gradient-to-r from-red-600 to-red-500 text-white font-bold px-6 py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 w-full mb-4 text-sm md:text-base hover:scale-[1.02] transition-transform">
+                                <i data-lucide="file-down" class="w-5 h-5"></i> تحميل الاستمارة (PDF)
+                            </button>
                         `;
                     }
                     return `
@@ -1879,19 +1984,18 @@
                             <h2 class="text-xl sm:text-2xl md:text-3xl font-black text-white mb-2 sm:mb-4">تمت العملية بنجاح!</h2>
                             <p class="text-xs sm:text-sm md:text-base text-slate-300 mb-6 sm:mb-8">تم حفظ وتحديث بياناتك في المنصة.</p>
                             ${pdfBtnHtml}
-                            <button onclick="JobApp.navigate('seeker_profile')" class="mt-4 bg-blue-600 text-white font-bold px-6 md:px-8 py-3 md:py-4 rounded-xl w-full hover:bg-blue-500 flex items-center justify-center gap-2 shadow-lg transition-all hover:-translate-y-1 text-sm md:text-base">
-                                <i data-lucide="user" class="w-4 h-4 md:w-5 md:h-5"></i> العودة لملفي الشخصي
-                            </button>
+                            <button onclick="JobApp.navigate('seeker_profile')" class="mt-4 bg-blue-600 text-white font-bold px-6 md:px-8 py-3 md:py-4 rounded-xl w-full hover:bg-blue-500 flex items-center justify-center gap-2 shadow-lg transition-all hover:-translate-y-1 text-sm md:text-base">العودة لحسابي <i data-lucide="arrow-left" class="w-4 h-4 md:w-5 md:h-5"></i></button>
                         </div>
                     </div>`;
                 }
             }
         };
 
-        document.addEventListener('DOMContentLoaded', () => { 
-            window.JobApp.init(); 
+        // Initialize App
+        document.addEventListener('DOMContentLoaded', () => {
+            JobApp.init();
+            seedDefaultsAndCount();
         });
-
     </script>
 </body>
 </html>
