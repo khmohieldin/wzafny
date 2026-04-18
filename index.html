@@ -1589,6 +1589,43 @@
                     if(!admin) return '<div class="text-center p-20 text-red-500 font-bold text-2xl">غير مصرح بالدخول</div>';
 
                     let tabContent = '';
+
+                if (JobAppState.adminTab === 'statistics') {
+                    const totalSeekers = JobAppState.seekers.length;
+                    const getFieldStats = (fieldId, title, icon, color) => {
+                        if (totalSeekers === 0) return '<div class="text-slate-500 text-sm text-center py-4">لا توجد بيانات كافية للتحليل</div>';
+                        const counts = {};
+                        JobAppState.seekers.forEach(s => {
+                            const val = (s.formData && s.formData[fieldId]) || 'غير محدد';
+                            counts[val] = (counts[val] || 0) + 1;
+                        });
+                        const sortedKeys = Object.keys(counts).sort((a,b) => counts[b] - counts[a]);
+                        let rows = sortedKeys.map(k => {
+                            const pct = Math.round((counts[k] / totalSeekers) * 100);
+                            return `<div class="mb-3"><div class="flex justify-between text-[10px] sm:text-xs text-slate-300 mb-1"><span class="font-bold">${k} (${counts[k]})</span><span class="font-bold text-${color}-400" dir="ltr">${pct}%</span></div><div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden border border-white/5"><div class="bg-${color}-500 h-full rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(0,0,0,0.5)]" style="width: ${pct}%"></div></div></div>`;
+                        }).join('');
+                        return `<div class="glass-panel p-4 sm:p-6 rounded-3xl border border-white/10 shadow-lg h-full hover:border-${color}-500/30 transition-colors"><h4 class="text-sm sm:text-base font-black text-white mb-5 flex items-center gap-2 border-b border-white/5 pb-3"><i data-lucide="${icon}" class="w-4 h-4 sm:w-5 sm:h-5 text-${color}-400"></i> ${title}</h4>${rows}</div>`;
+                    };
+                    tabContent = `
+                    <div class="bg-black/30 border border-cyan-500/30 p-4 sm:p-6 rounded-3xl mb-6 sm:mb-8 shadow-inner flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div class="text-center sm:text-right">
+                            <h3 class="text-xl sm:text-2xl font-black text-cyan-400 mb-1 flex items-center justify-center sm:justify-start gap-2"><i data-lucide="pie-chart" class="w-6 h-6"></i> إحصائيات وفلاتر السير الذاتية</h3>
+                            <p class="text-slate-400 text-xs sm:text-sm font-bold">تحليل ذكي لبيانات الموظفين المسجلين حالياً</p>
+                        </div>
+                        <div class="bg-cyan-500/10 border border-cyan-500/30 px-6 py-3 rounded-2xl text-center shadow-lg shrink-0">
+                            <div class="text-[10px] text-cyan-300 font-bold mb-1">إجمالي الكفاءات</div>
+                            <div class="text-2xl font-black text-white">${totalSeekers}</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 pb-10">
+                        ${getFieldStats('f12', 'المؤهلات الدراسية', 'graduation-cap', 'blue')}
+                        ${getFieldStats('f25', 'رخص القيادة', 'car', 'amber')}
+                        ${getFieldStats('f22', 'اللغة الإنجليزية', 'languages', 'emerald')}
+                        ${getFieldStats('f4', 'الحالة الاجتماعية', 'users', 'purple')}
+                        ${getFieldStats('f5', 'الموقف من التجنيد', 'shield', 'rose')}
+                        ${getFieldStats('f24', 'قيادة المركبات', 'bike', 'cyan')}
+                    </div>`;
+                }
                     
                     if (JobAppState.adminTab === 'system_admins') {
                         tabContent = `
@@ -1947,7 +1984,8 @@
                                 <nav class="flex flex-col gap-1.5 sm:gap-2">
                                     <button onclick="JobAppState.adminTab='system_admins'; JobApp.render()" class="w-full text-right px-4 py-2.5 sm:py-3 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center gap-3 ${JobAppState.adminTab==='system_admins' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}"><i data-lucide="shield" class="w-4 h-4 sm:w-5 sm:h-5"></i> مدراء النظام</button>
                                     <button onclick="JobAppState.adminTab='users'; JobApp.render()" class="w-full text-right px-4 py-2.5 sm:py-3 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center gap-3 ${JobAppState.adminTab==='users' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}"><i data-lucide="users" class="w-4 h-4 sm:w-5 sm:h-5"></i> الأعضاء (${JobAppState.seekers.length + JobAppState.employers.length})</button>
-                                    <button onclick="JobAppState.adminTab='requests'; JobApp.render()" class="w-full text-right px-4 py-2.5 sm:py-3 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center justify-between ${JobAppState.adminTab==='requests' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}">
+                                    <button onclick="JobAppState.adminTab='statistics'; JobApp.render()" class="w-full text-right px-4 py-2.5 sm:py-3 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center gap-3 ${JobAppState.adminTab==='statistics' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-cyan-400'}"><i data-lucide="pie-chart" class="w-4 h-4 sm:w-5 sm:h-5"></i> إحصائيات هامة</button>
+<button onclick="JobAppState.adminTab='requests'; JobApp.render()" class="w-full text-right px-4 py-2.5 sm:py-3 rounded-xl font-bold transition-all text-xs sm:text-sm flex items-center justify-between ${JobAppState.adminTab==='requests' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/5'}">
                                         <div class="flex items-center gap-3"><i data-lucide="briefcase" class="w-4 h-4 sm:w-5 sm:h-5"></i> الطلبات</div>
                                         ${JobAppState.requests.length > 0 ? `<span class="bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">${JobAppState.requests.length}</span>` : ''}
                                     </button>
